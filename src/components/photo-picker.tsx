@@ -1,5 +1,14 @@
-import { useRef, useState } from 'react';
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Alert,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  type StyleProp,
+  type ImageStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,22 +17,59 @@ import * as Crypto from 'expo-crypto';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { extensionFromUri, savePersistentCopy } from '@/lib/files';
+import { deleteStorageFile, extensionFromUri, getSignedUrl, uploadCapturedFile } from '@/lib/files';
 import { PHOTO_LABELS, PHOTO_LABEL_TITLES, type ContactPhoto, type PhotoLabel } from '@/lib/types';
 
 type PhotoPickerProps = {
   photos: ContactPhoto[];
   onAdd: (photo: ContactPhoto) => void;
-  onRemove: (photoId: string) => void;
+  onRemove: (photo: ContactPhoto) => void;
   onLabelChange: (photoId: string, label: PhotoLabel | undefined) => void;
 };
 
+// Resolves a displayable uri for one photo: an instant local preview if this
+// component uploaded it during its own lifetime, otherwise a signed URL
+// fetched from Supabase Storage (the bucket is private, so there's no plain
+// public URL to construct).
+function PhotoImage({
+  photo,
+  localPreviewUri,
+  style,
+  resizeMode = 'cover',
+}: {
+  photo: ContactPhoto;
+  localPreviewUri?: string;
+  style: StyleProp<ImageStyle>;
+  resizeMode?: 'cover' | 'contain';
+}) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (localPreviewUri) return;
+    let cancelled = false;
+    getSignedUrl('photos', photo.storagePath)
+      .then((url) => {
+        if (!cancelled) setSignedUrl(url);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [photo.storagePath, localPreviewUri]);
+
+  const uri = localPreviewUri ?? signedUrl;
+  if (!uri) return <ThemedView type="backgroundElement" style={style} />;
+  return <Image source={{ uri }} style={style} resizeMode={resizeMode} />;
+}
+
 export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPickerProps) {
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [libraryPermission, requestLibraryPermission] = ImagePicker.useMediaLibraryPermissions();
   const cameraRef = useRef<CameraView>(null);
+  const [localPreviews, setLocalPreviews] = useState<Record<string, string>>({});
 
   const viewingPhoto = photos.find((p) => p.id === viewingPhotoId) ?? null;
 
@@ -36,6 +82,18 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
       }
     }
     setCameraOpen(true);
+  };
+
+  const uploadAndAdd = async (localUri: string) => {
+    const id = Crypto.randomUUID();
+    try {
+      const storagePath = await uploadCapturedFile('photos', localUri, extensionFromUri(localUri, 'jpg'));
+      setLocalPreviews((prev) => ({ ...prev, [id]: localUri }));
+      onAdd({ id, storagePath, createdAt: new Date().toISOString() });
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const pickFromLibrary = async () => {
@@ -54,25 +112,35 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
     });
     if (result.canceled) return;
 
-    // Each photo is saved independently: one bad file shouldn't stop the
+    setUploading(true);
+    // Each photo uploads independently: one bad file shouldn't stop the
     // rest of the batch from being added.
     let failures = 0;
     for (const asset of result.assets) {
-      try {
-        const uri = await savePersistentCopy(
-          asset.uri,
-          'photos',
-          extensionFromUri(asset.uri, 'jpg'),
-        );
-        onAdd({ id: Crypto.randomUUID(), uri, createdAt: new Date().toISOString() });
-      } catch {
-        failures += 1;
-      }
+      const ok = await uploadAndAdd(asset.uri);
+      if (!ok) failures += 1;
     }
+    setUploading(false);
     if (failures > 0) {
       Alert.alert(
-        'Some photos failed to add',
-        `${failures} photo${failures === 1 ? '' : 's'} couldn't be added. The rest were saved.`,
+        'Some photos failed to upload',
+        `${failures} photo${failures === 1 ? '' : 's'} couldn't be uploaded. The rest were saved.`,
+      );
+    }
+  };
+
+  const takePicture = async () => {
+    const photo = await cameraRef.current?.takePictureAsync({ quality: 0.7 });
+    setCameraOpen(false);
+    if (!photo) return;
+
+    setUploading(true);
+    const ok = await uploadAndAdd(photo.uri);
+    setUploading(false);
+    if (!ok) {
+      Alert.alert(
+        "Couldn't upload photo",
+        'Something went wrong saving that photo. Please try again.',
       );
     }
   };
@@ -85,32 +153,22 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
     ]);
   };
 
-  const takePicture = async () => {
-    const photo = await cameraRef.current?.takePictureAsync({ quality: 0.7 });
-    setCameraOpen(false);
-    if (!photo) return;
-
-    // Copy to permanent storage immediately: the camera's temp file can be
-    // cleared by the OS within seconds, especially on Android.
-    try {
-      const uri = await savePersistentCopy(
-        photo.uri,
-        'photos',
-        extensionFromUri(photo.uri, 'jpg'),
-      );
-      onAdd({ id: Crypto.randomUUID(), uri, createdAt: new Date().toISOString() });
-    } catch {
-      Alert.alert(
-        "Couldn't save photo",
-        'Something went wrong saving that photo. Please try again.',
-      );
-    }
+  const removePhoto = (photo: ContactPhoto) => {
+    // Best-effort: don't block removing a photo from the contact just
+    // because deleting the underlying file failed.
+    deleteStorageFile('photos', photo.storagePath).catch(() => {});
+    setLocalPreviews((prev) => {
+      const next = { ...prev };
+      delete next[photo.id];
+      return next;
+    });
+    onRemove(photo);
   };
 
-  const confirmDelete = (photoId: string) => {
+  const confirmDelete = (photo: ContactPhoto) => {
     Alert.alert('Delete photo?', undefined, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => onRemove(photoId) },
+      { text: 'Delete', style: 'destructive', onPress: () => removePhoto(photo) },
     ]);
   };
 
@@ -121,19 +179,24 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
           <Pressable
             key={photo.id}
             onPress={() => setViewingPhotoId(photo.id)}
-            onLongPress={() => confirmDelete(photo.id)}
+            onLongPress={() => confirmDelete(photo)}
             style={styles.thumbnailWrapper}>
-            <Image source={{ uri: photo.uri }} style={styles.thumbnail} />
-            <Pressable onPress={() => confirmDelete(photo.id)} hitSlop={8} style={styles.deleteBadge}>
+            <PhotoImage
+              photo={photo}
+              localPreviewUri={localPreviews[photo.id]}
+              style={styles.thumbnail}
+            />
+            <Pressable onPress={() => confirmDelete(photo)} hitSlop={8} style={styles.deleteBadge}>
               <ThemedText style={styles.deleteBadgeText}>×</ThemedText>
             </Pressable>
           </Pressable>
         ))}
         <Pressable
           onPress={handleAddPhoto}
+          disabled={uploading}
           style={({ pressed }) => [styles.addTile, pressed && styles.pressed]}>
           <ThemedText type="title" style={styles.addTileText}>
-            +
+            {uploading ? '…' : '+'}
           </ThemedText>
         </Pressable>
       </ScrollView>
@@ -161,8 +224,9 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
         onRequestClose={() => setViewingPhotoId(null)}>
         {viewingPhoto && (
           <ThemedView style={styles.flex}>
-            <Image
-              source={{ uri: viewingPhoto.uri }}
+            <PhotoImage
+              photo={viewingPhoto}
+              localPreviewUri={localPreviews[viewingPhoto.id]}
               style={styles.fullImage}
               resizeMode="contain"
             />
@@ -190,7 +254,7 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
               <ThemedView style={styles.viewerButtonRow}>
                 <Pressable
                   onPress={() => {
-                    onRemove(viewingPhoto.id);
+                    removePhoto(viewingPhoto);
                     setViewingPhotoId(null);
                   }}
                   style={styles.viewerButton}>

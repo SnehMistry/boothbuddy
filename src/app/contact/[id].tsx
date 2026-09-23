@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { getSignedUrl } from '@/lib/files';
 import {
   addPhotoToContact,
   getContact,
@@ -42,7 +43,19 @@ export default function ContactDetailScreen() {
     }, [id]),
   );
 
-  const player = useAudioPlayer(contact?.audioUri ?? null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!contact?.audioStoragePath) return;
+    let cancelled = false;
+    getSignedUrl('audio', contact.audioStoragePath).then((url) => {
+      if (!cancelled) setAudioUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [contact?.audioStoragePath]);
+
+  const player = useAudioPlayer(audioUrl);
   const playerStatus = useAudioPlayerStatus(player);
 
   // Save on blur rather than on every keystroke, so we're not writing to
@@ -67,9 +80,9 @@ export default function ContactDetailScreen() {
     if (updated) setContact(updated);
   };
 
-  const handleRemovePhoto = async (photoId: string) => {
+  const handleRemovePhoto = async (photo: ContactPhoto) => {
     if (!contact) return;
-    const updated = await removePhotoFromContact(contact.id, photoId);
+    const updated = await removePhotoFromContact(contact.id, photo);
     if (updated) setContact(updated);
   };
 
@@ -109,7 +122,7 @@ export default function ContactDetailScreen() {
         onLabelChange={handleLabelChange}
       />
 
-      {contact.audioUri && (
+      {contact.audioStoragePath && (
         <>
           <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
             Voice memo

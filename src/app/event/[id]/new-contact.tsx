@@ -23,7 +23,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { extensionFromUri, savePersistentCopy } from '@/lib/files';
+import { extensionFromUri, uploadCapturedFile } from '@/lib/files';
 import { createContact } from '@/lib/storage';
 import type { ContactPhoto, PhotoLabel } from '@/lib/types';
 
@@ -39,9 +39,9 @@ export default function NewContactScreen() {
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder);
-  // audioUri is already a permanent-storage path by the time it's set here —
-  // see handleStopRecording. Never store the recorder's raw cache uri.
-  const [audioUri, setAudioUri] = useState<string | null>(null);
+  // Already a Supabase Storage path by the time it's set here — see
+  // handleStopRecording. Never store the recorder's raw local uri.
+  const [audioStoragePath, setAudioStoragePath] = useState<string | null>(null);
   const [savingAudio, setSavingAudio] = useState(false);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -54,7 +54,7 @@ export default function NewContactScreen() {
       Alert.alert('Microphone access needed', 'Enable microphone access to record a voice memo.');
       return;
     }
-    setAudioUri(null);
+    setAudioStoragePath(null);
     await recorder.prepareToRecordAsync();
     recorder.record();
   };
@@ -64,12 +64,12 @@ export default function NewContactScreen() {
     const tempUri = recorder.uri;
     if (!tempUri) return;
 
-    // Copy to permanent storage right away — the recording's cache file can
-    // be cleared by the OS within seconds, especially on Android.
+    // Upload right away — the recording's cache file can be cleared by the
+    // OS within seconds, especially on Android.
     setSavingAudio(true);
     try {
-      const uri = await savePersistentCopy(tempUri, 'audio', extensionFromUri(tempUri, 'm4a'));
-      setAudioUri(uri);
+      const path = await uploadCapturedFile('audio', tempUri, extensionFromUri(tempUri, 'm4a'));
+      setAudioStoragePath(path);
     } catch {
       Alert.alert(
         "Couldn't save recording",
@@ -97,8 +97,8 @@ export default function NewContactScreen() {
   };
 
   const handleAddPhoto = (photo: ContactPhoto) => setPhotos((prev) => [...prev, photo]);
-  const handleRemovePhoto = (photoId: string) =>
-    setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+  const handleRemovePhoto = (photo: ContactPhoto) =>
+    setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
   const handleLabelChange = (photoId: string, label: PhotoLabel | undefined) =>
     setPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, label } : p)));
 
@@ -106,12 +106,12 @@ export default function NewContactScreen() {
     if (!canSave) return;
     setSaving(true);
     try {
-      // Audio and photos are already saved to permanent storage as they
+      // Audio and photos are already uploaded to Supabase Storage as they
       // were captured, so this is just writing the contact record itself.
       await createContact({
         eventId,
         name: name.trim(),
-        audioUri: audioUri ?? undefined,
+        audioStoragePath: audioStoragePath ?? undefined,
         photos,
         companyUrl: companyUrl.trim() || undefined,
       });
@@ -170,7 +170,7 @@ export default function NewContactScreen() {
                 : '🎙️ Record Voice Memo'}
           </ThemedText>
         </Pressable>
-        {audioUri && !recorderState.isRecording && !savingAudio && (
+        {audioStoragePath && !recorderState.isRecording && !savingAudio && (
           <ThemedText type="small" themeColor="textSecondary" style={styles.confirmText}>
             ✓ Voice memo recorded
           </ThemedText>

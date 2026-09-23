@@ -17,9 +17,13 @@ export const PHOTO_LABEL_TITLES: Record<PhotoLabel, string> = {
   other: 'Other',
 };
 
+// storagePath (not a local uri): the file's path inside the Supabase
+// Storage "photos" bucket, e.g. "{userId}/{uuid}.jpg". It's the only
+// reference to the photo that's meaningful on every device — a local file
+// uri only exists on the device that captured it.
 export type ContactPhoto = {
   id: string;
-  uri: string;
+  storagePath: string;
   label?: PhotoLabel;
   createdAt: string;
 };
@@ -29,7 +33,7 @@ export type Contact = {
   eventId: string;
   name: string;
   createdAt: string; // ISO timestamp; also the timeline sort key
-  audioUri?: string;
+  audioStoragePath?: string; // path inside the "audio" bucket
   photos: ContactPhoto[];
   companyUrl?: string; // filled by typing, or by scanning a QR code
 };
