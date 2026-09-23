@@ -1,14 +1,21 @@
 import { useCallback, useState } from 'react';
-import { Image, Linking, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
+import { PhotoPicker } from '@/components/photo-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { getContact, updateContact } from '@/lib/storage';
-import type { Contact } from '@/lib/types';
+import {
+  addPhotoToContact,
+  getContact,
+  removePhotoFromContact,
+  setContactPhotoLabel,
+  updateContact,
+} from '@/lib/storage';
+import type { Contact, ContactPhoto, PhotoLabel } from '@/lib/types';
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -54,6 +61,24 @@ export default function ContactDetailScreen() {
     if (updated) setContact(updated);
   };
 
+  const handleAddPhoto = async (photo: ContactPhoto) => {
+    if (!contact) return;
+    const updated = await addPhotoToContact(contact.id, photo);
+    if (updated) setContact(updated);
+  };
+
+  const handleRemovePhoto = async (photoId: string) => {
+    if (!contact) return;
+    const updated = await removePhotoFromContact(contact.id, photoId);
+    if (updated) setContact(updated);
+  };
+
+  const handleLabelChange = async (photoId: string, label: PhotoLabel | undefined) => {
+    if (!contact) return;
+    const updated = await setContactPhotoLabel(contact.id, photoId, label);
+    if (updated) setContact(updated);
+  };
+
   if (!contact) return null;
 
   return (
@@ -74,14 +99,15 @@ export default function ContactDetailScreen() {
         style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
       />
 
-      {contact.photoUri && (
-        <>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
-            Photo
-          </ThemedText>
-          <Image source={{ uri: contact.photoUri }} style={styles.photo} />
-        </>
-      )}
+      <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
+        Photos
+      </ThemedText>
+      <PhotoPicker
+        photos={contact.photos}
+        onAdd={handleAddPhoto}
+        onRemove={handleRemovePhoto}
+        onLabelChange={handleLabelChange}
+      />
 
       {contact.audioUri && (
         <>
@@ -140,11 +166,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     fontSize: 16,
-  },
-  photo: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-    borderRadius: Spacing.three,
   },
   playButton: {
     backgroundColor: '#3c87f7',

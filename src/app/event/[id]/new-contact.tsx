@@ -1,7 +1,6 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,19 +18,14 @@ import {
 } from 'expo-audio';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 
+import { PhotoPicker } from '@/components/photo-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { savePersistentCopy } from '@/lib/files';
+import { extensionFromUri, savePersistentCopy } from '@/lib/files';
 import { createContact } from '@/lib/storage';
-
-function extensionFromUri(uri: string, fallback: string) {
-  const match = uri.match(/\.([a-zA-Z0-9]+)(\?.*)?$/);
-  return match ? match[1] : fallback;
-}
-
-type OverlayMode = 'none' | 'photo' | 'scan';
+import type { ContactPhoto, PhotoLabel } from '@/lib/types';
 
 export default function NewContactScreen() {
   const { id: eventId } = useLocalSearchParams<{ id: string }>();
@@ -39,16 +33,18 @@ export default function NewContactScreen() {
 
   const [name, setName] = useState('');
   const [companyUrl, setCompanyUrl] = useState('');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<ContactPhoto[]>([]);
   const [saving, setSaving] = useState(false);
-  const [overlay, setOverlay] = useState<OverlayMode>('none');
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder);
+  // audioUri is already a permanent-storage path by the time it's set here —
+  // see handleStopRecording. Never store the recorder's raw cache uri.
   const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [savingAudio, setSavingAudio] = useState(false);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView>(null);
 
   const canSave = name.trim().length > 0 && !saving;
 
@@ -65,18 +61,23 @@ export default function NewContactScreen() {
 
   const handleStopRecording = async () => {
     await recorder.stop();
-    setAudioUri(recorder.uri ?? null);
-  };
+    const tempUri = recorder.uri;
+    if (!tempUri) return;
 
-  const openCamera = async () => {
-    if (!cameraPermission?.granted) {
-      const result = await requestCameraPermission();
-      if (!result.granted) {
-        Alert.alert('Camera access needed', 'Enable camera access to take a photo.');
-        return;
-      }
+    // Copy to permanent storage right away — the recording's cache file can
+    // be cleared by the OS within seconds, especially on Android.
+    setSavingAudio(true);
+    try {
+      const uri = await savePersistentCopy(tempUri, 'audio', extensionFromUri(tempUri, 'm4a'));
+      setAudioUri(uri);
+    } catch {
+      Alert.alert(
+        "Couldn't save recording",
+        'Something went wrong saving that voice memo. Please try recording it again.',
+      );
+    } finally {
+      setSavingAudio(false);
     }
-    setOverlay('photo');
   };
 
   const openScanner = async () => {
@@ -87,67 +88,59 @@ export default function NewContactScreen() {
         return;
       }
     }
-    setOverlay('scan');
-  };
-
-  const takePicture = async () => {
-    const photo = await cameraRef.current?.takePictureAsync({ quality: 0.7 });
-    if (photo) setPhotoUri(photo.uri);
-    setOverlay('none');
+    setScannerOpen(true);
   };
 
   const handleBarcodeScanned = (result: BarcodeScanningResult) => {
     setCompanyUrl(result.data);
-    setOverlay('none');
+    setScannerOpen(false);
   };
+
+  const handleAddPhoto = (photo: ContactPhoto) => setPhotos((prev) => [...prev, photo]);
+  const handleRemovePhoto = (photoId: string) =>
+    setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+  const handleLabelChange = (photoId: string, label: PhotoLabel | undefined) =>
+    setPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, label } : p)));
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
-
-    const savedAudioUri = audioUri
-      ? await savePersistentCopy(audioUri, 'audio', extensionFromUri(audioUri, 'm4a'))
-      : undefined;
-    const savedPhotoUri = photoUri
-      ? await savePersistentCopy(photoUri, 'photos', extensionFromUri(photoUri, 'jpg'))
-      : undefined;
-
-    await createContact({
-      eventId,
-      name: name.trim(),
-      audioUri: savedAudioUri,
-      photoUri: savedPhotoUri,
-      companyUrl: companyUrl.trim() || undefined,
-    });
-
-    router.replace(`/event/${eventId}`);
+    try {
+      // Audio and photos are already saved to permanent storage as they
+      // were captured, so this is just writing the contact record itself.
+      await createContact({
+        eventId,
+        name: name.trim(),
+        audioUri: audioUri ?? undefined,
+        photos,
+        companyUrl: companyUrl.trim() || undefined,
+      });
+      router.replace(`/event/${eventId}`);
+    } catch {
+      Alert.alert(
+        "Couldn't save contact",
+        'Something went wrong saving this contact. Your voice memo and photos are safe — please try Save again.',
+      );
+      setSaving(false);
+    }
   };
 
-  if (overlay === 'photo' || overlay === 'scan') {
+  if (scannerOpen) {
     return (
       <ThemedView style={styles.flex}>
         <CameraView
-          ref={cameraRef}
           style={styles.flex}
           facing="back"
-          barcodeScannerSettings={overlay === 'scan' ? { barcodeTypes: ['qr'] } : undefined}
-          onBarcodeScanned={overlay === 'scan' ? handleBarcodeScanned : undefined}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          onBarcodeScanned={handleBarcodeScanned}
         />
         <SafeAreaView style={styles.cameraControls}>
           <Pressable
-            onPress={() => setOverlay('none')}
+            onPress={() => setScannerOpen(false)}
             style={({ pressed }) => [styles.cameraCancel, pressed && styles.pressed]}>
             <ThemedText style={styles.cameraCancelText}>Cancel</ThemedText>
           </Pressable>
-          {overlay === 'photo' && (
-            <Pressable
-              onPress={takePicture}
-              style={({ pressed }) => [styles.shutterButton, pressed && styles.pressed]}
-            />
-          )}
-          {overlay === 'scan' && (
-            <ThemedText style={styles.cameraCancelText}>Point at a QR code</ThemedText>
-          )}
+          <ThemedText style={styles.cameraCancelText}>Point at a QR code</ThemedText>
         </SafeAreaView>
       </ThemedView>
     );
@@ -163,37 +156,35 @@ export default function NewContactScreen() {
         </ThemedText>
         <Pressable
           onPress={recorderState.isRecording ? handleStopRecording : handleStartRecording}
+          disabled={savingAudio}
           style={({ pressed }) => [
             styles.bigButton,
             recorderState.isRecording && styles.bigButtonRecording,
             pressed && styles.pressed,
           ]}>
           <ThemedText type="smallBold" style={styles.bigButtonText}>
-            {recorderState.isRecording ? '⏹ Stop Recording' : '🎙️ Record Voice Memo'}
+            {savingAudio
+              ? 'Saving recording…'
+              : recorderState.isRecording
+                ? '⏹ Stop Recording'
+                : '🎙️ Record Voice Memo'}
           </ThemedText>
         </Pressable>
-        {audioUri && !recorderState.isRecording && (
+        {audioUri && !recorderState.isRecording && !savingAudio && (
           <ThemedText type="small" themeColor="textSecondary" style={styles.confirmText}>
             ✓ Voice memo recorded
           </ThemedText>
         )}
 
         <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
-          Photo — business card, badge, or booth
+          Photos — business card, badge, booth, brochure
         </ThemedText>
-        {photoUri ? (
-          <Pressable onPress={openCamera}>
-            <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={openCamera}
-            style={({ pressed }) => [styles.bigButton, pressed && styles.pressed]}>
-            <ThemedText type="smallBold" style={styles.bigButtonText}>
-              📷 Take Photo
-            </ThemedText>
-          </Pressable>
-        )}
+        <PhotoPicker
+          photos={photos}
+          onAdd={handleAddPhoto}
+          onRemove={handleRemovePhoto}
+          onLabelChange={handleLabelChange}
+        />
 
         <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
           Company URL — scan their QR code or type it
@@ -270,11 +261,6 @@ const styles = StyleSheet.create({
   confirmText: {
     marginTop: Spacing.one,
   },
-  photoPreview: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-    borderRadius: Spacing.three,
-  },
   scanButton: {
     backgroundColor: '#60646c',
     paddingVertical: Spacing.three,
@@ -318,13 +304,5 @@ const styles = StyleSheet.create({
   cameraCancelText: {
     color: '#ffffff',
     fontSize: 16,
-  },
-  shutterButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#ffffff',
-    borderWidth: 4,
-    borderColor: '#00000055',
   },
 });

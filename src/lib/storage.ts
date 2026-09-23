@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 
-import type { BoothEvent, Contact } from '@/lib/types';
+import type { BoothEvent, Contact, ContactPhoto, PhotoLabel } from '@/lib/types';
 
 // Phase 1 is local-only: everything lives in AsyncStorage as two JSON lists.
 // Phase 2 replaces this module with Supabase calls behind the same function
@@ -80,4 +80,42 @@ export async function updateContact(
   contacts[index] = updated;
   await writeList(CONTACTS_KEY, contacts);
   return updated;
+}
+
+async function updateContactPhotos(
+  contactId: string,
+  transform: (photos: ContactPhoto[]) => ContactPhoto[],
+): Promise<Contact | undefined> {
+  const contacts = await readList<Contact>(CONTACTS_KEY);
+  const index = contacts.findIndex((contact) => contact.id === contactId);
+  if (index === -1) return undefined;
+
+  const updated = { ...contacts[index], photos: transform(contacts[index].photos) };
+  contacts[index] = updated;
+  await writeList(CONTACTS_KEY, contacts);
+  return updated;
+}
+
+export async function addPhotoToContact(
+  contactId: string,
+  photo: ContactPhoto,
+): Promise<Contact | undefined> {
+  return updateContactPhotos(contactId, (photos) => [...photos, photo]);
+}
+
+export async function removePhotoFromContact(
+  contactId: string,
+  photoId: string,
+): Promise<Contact | undefined> {
+  return updateContactPhotos(contactId, (photos) => photos.filter((p) => p.id !== photoId));
+}
+
+export async function setContactPhotoLabel(
+  contactId: string,
+  photoId: string,
+  label: PhotoLabel | undefined,
+): Promise<Contact | undefined> {
+  return updateContactPhotos(contactId, (photos) =>
+    photos.map((p) => (p.id === photoId ? { ...p, label } : p)),
+  );
 }

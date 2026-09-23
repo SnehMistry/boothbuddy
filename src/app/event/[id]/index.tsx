@@ -65,7 +65,7 @@ export default function EventTimelineScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   {formatTime(item.createdAt)}
                   {item.audioUri ? ' · 🎙️' : ''}
-                  {item.photoUri ? ' · 📷' : ''}
+                  {item.photos.length > 0 ? ` · 📷×${item.photos.length}` : ''}
                 </ThemedText>
               </ThemedView>
             </Pressable>

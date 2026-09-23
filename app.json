@@ -44,6 +44,12 @@
         {
           "cameraPermission": "BoothBuddy uses your camera to photograph business cards, badges, and QR codes."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "BoothBuddy uses your photo library so you can attach an existing photo of a business card or badge."
+        }
       ]
     ],
     "experiments": {
