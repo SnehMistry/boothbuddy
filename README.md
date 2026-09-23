@@ -4,7 +4,7 @@ A career fair / networking follow-up assistant. Capture a 60-second voice memo
 and a photo after each conversation, and let AI turn it into a structured
 contact card and draft LinkedIn follow-up messages that night.
 
-> 🚧 Status: early development (Phase 0 — project scaffolding). See
+> 🚧 Status: early development (Phase 2 — Supabase setup). See
 > [Roadmap](#roadmap) below for what's built vs. planned.
 
 ## The problem
@@ -22,8 +22,8 @@ is working._
 
 ## Features
 
-- [ ] Create an "Event" (career fair / networking event) and group contacts under it
-- [ ] Capture a contact in ~60 seconds: voice memo + photo + name
+- [x] Create an "Event" (career fair / networking event) and group contacts under it
+- [x] Capture a contact in ~60 seconds: voice memo + photo(s) + name
 - [ ] Auto-transcribe voice memos
 - [ ] AI-structured contact card: name, title, company, contact info, summary,
       topics, opportunities mentioned, action items, interest level
@@ -137,7 +137,7 @@ the app — they live only in Supabase Edge Function secrets.
 Built in phases, each one runnable and testable before moving to the next:
 
 - [x] **Phase 0** — Project scaffolding: Expo + TypeScript + Expo Router, git, GitHub repo
-- [ ] **Phase 1** — Local-only MVP: create event, capture contact (name, voice memo, photo/QR), timeline view. No AI yet.
+- [x] **Phase 1** — Local-only MVP: create event, capture contact (name, voice memo, photo/QR), timeline view. No AI yet.
 - [ ] **Phase 2** — Supabase: auth, database schema, file storage, syncing
 - [ ] **Phase 3** — AI pipeline via Edge Functions: transcription, contact structuring, business card reading
 - [ ] **Phase 4** — Follow-up drafting screen: copy/regenerate/tone, "Open LinkedIn", sent status
