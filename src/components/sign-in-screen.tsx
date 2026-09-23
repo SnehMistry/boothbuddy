@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,44 +13,68 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 
+const MIN_PASSWORD_LENGTH = 8;
+
+function friendlyAuthError(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes('invalid login credentials')) {
+    return 'Incorrect email or password.';
+  }
+  if (lower.includes('user already registered') || lower.includes('already been registered')) {
+    return 'An account with this email already exists — try signing in instead.';
+  }
+  if (lower.includes('password should be at least') || lower.includes('password is too short')) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+  if (lower.includes('unable to validate email address') || lower.includes('invalid email')) {
+    return "That doesn't look like a valid email address.";
+  }
+  if (lower.includes('rate limit')) {
+    return 'Too many attempts — please wait a bit and try again.';
+  }
+  return message;
+}
+
 export function SignInScreen() {
   const theme = useTheme();
-  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [sending, setSending] = useState(false);
-  const [verifying, setVerifying] = useState(false);
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSendCode = async () => {
-    const trimmed = email.trim();
-    if (!trimmed) return;
-    setSending(true);
-    const { error } = await supabase.auth.signInWithOtp({ email: trimmed });
-    setSending(false);
-    if (error) {
-      Alert.alert("Couldn't send code", error.message);
-      return;
-    }
-    setStep('code');
+  const switchMode = () => {
+    setMode((m) => (m === 'sign-in' ? 'sign-up' : 'sign-in'));
+    setError(null);
   };
 
-  const handleVerifyCode = async () => {
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    setVerifying(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: trimmed,
-      type: 'email',
-    });
-    setVerifying(false);
-    if (error) {
-      Alert.alert("Couldn't verify code", error.message);
+  const handleSubmit = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) return;
+
+    if (mode === 'sign-up' && password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    const { error: authError } =
+      mode === 'sign-in'
+        ? await supabase.auth.signInWithPassword({ email: trimmedEmail, password })
+        : await supabase.auth.signUp({ email: trimmedEmail, password });
+
+    setSubmitting(false);
+    if (authError) {
+      setError(friendlyAuthError(authError.message));
       return;
     }
     // On success, useSession's onAuthStateChange listener picks up the new
     // session automatically — nothing else to do here.
   };
+
+  const canSubmit = email.trim().length > 0 && password.length > 0 && !submitting;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -62,73 +85,71 @@ export function SignInScreen() {
           BoothBuddy
         </ThemedText>
         <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-          {step === 'email'
-            ? 'Enter your email — no password needed.'
-            : `Enter the code we emailed to ${email.trim()}`}
+          {mode === 'sign-in' ? 'Sign in to your account' : 'Create an account'}
         </ThemedText>
 
-        {step === 'email' ? (
-          <>
-            <TextInput
-              autoFocus
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor={theme.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              style={[
-                styles.input,
-                { color: theme.text, backgroundColor: theme.backgroundElement },
-              ]}
-            />
-            <Pressable
-              onPress={handleSendCode}
-              disabled={sending || !email.trim()}
-              style={({ pressed }) => [
-                styles.button,
-                (sending || !email.trim()) && styles.buttonDisabled,
-                pressed && styles.pressed,
-              ]}>
-              <ThemedText type="smallBold" style={styles.buttonText}>
-                {sending ? 'Sending…' : 'Send Code'}
-              </ThemedText>
-            </Pressable>
-          </>
-        ) : (
-          <>
-            <TextInput
-              autoFocus
-              value={code}
-              onChangeText={setCode}
-              placeholder="123456"
-              placeholderTextColor={theme.textSecondary}
-              keyboardType="number-pad"
-              style={[
-                styles.input,
-                { color: theme.text, backgroundColor: theme.backgroundElement },
-              ]}
-            />
-            <Pressable
-              onPress={handleVerifyCode}
-              disabled={verifying || !code.trim()}
-              style={({ pressed }) => [
-                styles.button,
-                (verifying || !code.trim()) && styles.buttonDisabled,
-                pressed && styles.pressed,
-              ]}>
-              <ThemedText type="smallBold" style={styles.buttonText}>
-                {verifying ? 'Verifying…' : 'Verify Code'}
-              </ThemedText>
-            </Pressable>
-            <Pressable onPress={() => setStep('email')} style={styles.linkButton}>
-              <ThemedText type="link" themeColor="textSecondary">
-                Use a different email
-              </ThemedText>
-            </Pressable>
-          </>
+        <TextInput
+          autoFocus
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            setError(null);
+          }}
+          placeholder="you@example.com"
+          placeholderTextColor={theme.textSecondary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        />
+        <TextInput
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            setError(null);
+          }}
+          placeholder={
+            mode === 'sign-up' ? `Password (min ${MIN_PASSWORD_LENGTH} characters)` : 'Password'
+          }
+          placeholderTextColor={theme.textSecondary}
+          secureTextEntry
+          textContentType={mode === 'sign-up' ? 'newPassword' : 'password'}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        />
+
+        {error && (
+          <ThemedText type="small" style={styles.errorText}>
+            {error}
+          </ThemedText>
         )}
+
+        <Pressable
+          onPress={handleSubmit}
+          disabled={!canSubmit}
+          style={({ pressed }) => [
+            styles.button,
+            !canSubmit && styles.buttonDisabled,
+            pressed && styles.pressed,
+          ]}>
+          <ThemedText type="smallBold" style={styles.buttonText}>
+            {submitting
+              ? mode === 'sign-in'
+                ? 'Signing in…'
+                : 'Creating account…'
+              : mode === 'sign-in'
+                ? 'Sign In'
+                : 'Create Account'}
+          </ThemedText>
+        </Pressable>
+
+        <Pressable onPress={switchMode} style={styles.linkButton}>
+          <ThemedText type="link" themeColor="textSecondary">
+            {mode === 'sign-in'
+              ? "Don't have an account? Sign up"
+              : 'Already have an account? Sign in'}
+          </ThemedText>
+        </Pressable>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -157,6 +178,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
     fontSize: 16,
+    marginBottom: Spacing.two,
+  },
+  errorText: {
+    color: '#e0483e',
     marginBottom: Spacing.two,
   },
   button: {
