@@ -158,15 +158,19 @@ Library (`expo-image-picker`, multi-select enabled).
 Save time.** This was a real bug (see PROGRESS.md history): Android can
 evict a camera/picker temp file from its cache within seconds, so if the
 app waits until the user taps Save to copy the file, the source may already
-be gone and the copy throws. `savePersistentCopy` (`src/lib/files.ts`) must
+be gone and the copy throws. `uploadCapturedFile` (`src/lib/files.ts`) must
 be called right after `takePictureAsync`/`launchImageLibraryAsync`/
-recording `stop()`, and its result (not the original temp uri) is what gets
+recording `stop()` — it makes a local safety copy first, then uploads it,
+and its result (a Supabase Storage path, never a local uri) is what gets
 stored in state and eventually in `Contact`/`ContactPhoto`.
 
-**When Phase 2 (Supabase) lands**: `photos` should map to a `contact_photos`
-table (or a JSON column, if simplicity wins) with the same fields plus
-`storage_path` pointing at a Supabase Storage object instead of a local
-file uri. Keep the label enum.
+**Since Phase 2 (Supabase)**: `photos` maps to the `contact_photos` table
+(`supabase/migrations/20260923000000_init.sql`), storing `storage_path`
+(a path inside the private `photos` Storage bucket) rather than a local
+file uri — a local uri only means something on the device that captured it.
+Buckets are private, so displaying a photo means fetching a short-lived
+signed URL (`getSignedUrl` in `src/lib/files.ts`) rather than using a plain
+public URL.
 
 ## Person & Company research (planned for Phase 3 — not yet built)
 
