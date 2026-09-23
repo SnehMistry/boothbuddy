@@ -1,56 +1,146 @@
-# Welcome to your Expo app 👋
+# BoothBuddy
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A career fair / networking follow-up assistant. Capture a 60-second voice memo
+and a photo after each conversation, and let AI turn it into a structured
+contact card and draft LinkedIn follow-up messages that night.
 
-## Get started
+> 🚧 Status: early development (Phase 0 — project scaffolding). See
+> [Roadmap](#roadmap) below for what's built vs. planned.
 
-1. Install dependencies
+## The problem
 
-   ```bash
-   npm install
-   ```
+At career fairs and networking events you talk to a lot of people quickly.
+Afterward it's hard to remember who said what, who to follow up with first,
+and what to actually say. BoothBuddy makes capture fast (voice + photo,
+one-handed) and pushes the writing work — drafting personalized follow-up
+messages — onto AI, done later that night when you have time to review.
 
-2. Start the app
+## Screenshots
 
-   ```bash
-   npx expo start
-   ```
+_Coming soon — screenshots will be added once the core capture flow (Phase 1)
+is working._
 
-In the output, you'll find options to open the app in a
+## Features
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- [ ] Create an "Event" (career fair / networking event) and group contacts under it
+- [ ] Capture a contact in ~60 seconds: voice memo + photo + name
+- [ ] Auto-transcribe voice memos
+- [ ] AI-structured contact card: name, title, company, contact info, summary,
+      topics, opportunities mentioned, action items, interest level
+- [ ] Business card / badge photo reading (vision) to pre-fill fields
+- [ ] Timeline view of everyone met at an event
+- [ ] AI-drafted LinkedIn connection note + longer follow-up message per contact,
+      with tone options and regenerate
+- [ ] Track follow-up status: Not sent / Sent / Replied
+- [ ] Offline-first capture with background sync
+- [ ] Search & filter contacts by company, tag, interest level, event
+- [ ] Follow-up reminders for "Hot" contacts
+- [ ] Pre-event prep briefs from a pasted company list
+- [ ] CSV export per event
+- [ ] Web dashboard for reviewing contacts and drafting follow-ups at night
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Tech stack
 
-## Get a fresh project
+| Layer            | Choice                                              |
+| ---------------- | ---------------------------------------------------- |
+| App              | [Expo](https://expo.dev) (React Native) + [Expo Router](https://docs.expo.dev/router/introduction/) + TypeScript — one codebase for iOS, Android, and web |
+| Backend          | [Supabase](https://supabase.com) — Postgres database, email auth, file storage (audio + images) |
+| Server-side AI   | Supabase Edge Functions — the app never talks to AI APIs directly, so API keys never live on-device |
+| Speech-to-text   | OpenAI transcription API |
+| Structuring & drafting | Anthropic Claude API — turns transcripts into contact cards, reads business cards (vision), and drafts follow-up messages |
+| Capture          | `expo-camera` (photo + QR scanning), `expo-audio` (voice memo recording) |
 
-When you're ready, run:
+### Why this stack
 
-```bash
-npm run reset-project
+- **Expo + Expo Router** gives one TypeScript codebase for iOS, Android, and
+  web, with platform-specific files (e.g. `Component.web.tsx`) where the
+  mobile (capture-focused) and web (review-focused) UIs genuinely differ.
+- **Supabase** bundles Postgres + auth + file storage behind one client
+  library, which is enough for this app's needs without standing up a
+  separate backend server.
+- **Edge Functions as an AI proxy** is the only safe way to call paid AI APIs
+  from a mobile app: any key bundled into the app binary can be extracted, so
+  all AI calls happen server-side, authenticated by the user's Supabase
+  session.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    subgraph Client["Expo App (iOS / Android / Web)"]
+        UI[Capture UI: camera, mic, forms]
+        Local[(Local queue<br/>offline-first)]
+    end
+
+    subgraph Supabase["Supabase"]
+        Auth[Auth]
+        DB[(Postgres:<br/>events, contacts)]
+        Storage[(Storage:<br/>audio + images)]
+        Edge[Edge Functions]
+    end
+
+    subgraph AI["AI Providers"]
+        STT[OpenAI<br/>speech-to-text]
+        Claude[Anthropic Claude<br/>structuring, vision, drafting]
+    end
+
+    UI -->|record / photo| Local
+    Local -->|sync when online| Storage
+    UI -->|read / write rows| DB
+    UI -->|login| Auth
+    Storage -->|triggers processing| Edge
+    Edge -->|transcribe| STT
+    Edge -->|structure + draft| Claude
+    Edge -->|write results| DB
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Project structure
 
-### Other setup steps
+```
+src/
+  app/           # Expo Router screens (file-based routing) — one file = one screen
+  components/    # Shared UI components, with .web.tsx variants where platforms differ
+  constants/     # Theme, config constants
+  hooks/         # Shared React hooks
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Setup
 
-## Learn more
+### Prerequisites
 
-To learn more about developing your project with Expo, look at the following resources:
+- Node.js 18+ and npm
+- [Expo Go](https://expo.dev/go) app on your phone (for quick testing), or
+  Xcode / Android Studio for simulators
+- A [Supabase](https://supabase.com) account (added in Phase 2)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Install and run
 
-## Join the community
+```bash
+git clone <this-repo-url>
+cd boothbuddy
+npm install
+cp .env.example .env   # fill in real values once Supabase is set up (Phase 2)
+npx expo start
+```
 
-Join our community of developers creating universal apps.
+Then press `i` for iOS simulator, `a` for Android emulator, `w` for web, or
+scan the QR code with Expo Go on your phone.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### Environment variables
+
+See [`.env.example`](./.env.example). Client-side keys (Supabase URL/anon
+key) go in `.env`. AI provider keys (OpenAI, Anthropic) are never stored in
+the app — they live only in Supabase Edge Function secrets.
+
+## Roadmap
+
+Built in phases, each one runnable and testable before moving to the next:
+
+- [x] **Phase 0** — Project scaffolding: Expo + TypeScript + Expo Router, git, GitHub repo
+- [ ] **Phase 1** — Local-only MVP: create event, capture contact (name, voice memo, photo/QR), timeline view. No AI yet.
+- [ ] **Phase 2** — Supabase: auth, database schema, file storage, syncing
+- [ ] **Phase 3** — AI pipeline via Edge Functions: transcription, contact structuring, business card reading
+- [ ] **Phase 4** — Follow-up drafting screen: copy/regenerate/tone, "Open LinkedIn", sent status
+- [ ] **Phase 5** — Web dashboard UI
+- [ ] **Phase 6** — Offline queue, search/filter, reminders, pre-event prep, CSV export, stats
+- [ ] **Phase 7** — Polish, deployment (web to Vercel/Netlify, mobile via EAS)
