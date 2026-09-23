@@ -1,15 +1,17 @@
-import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, FlatList, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { getEvents } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
 import type { BoothEvent } from '@/lib/types';
 
 export default function EventsScreen() {
+  const navigation = useNavigation();
   const [events, setEvents] = useState<BoothEvent[]>([]);
 
   useFocusEffect(
@@ -17,6 +19,25 @@ export default function EventsScreen() {
       getEvents().then(setEvents);
     }, []),
   );
+
+  const handleSignOut = () => {
+    Alert.alert('Sign out?', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: () => supabase.auth.signOut() },
+    ]);
+  };
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable onPress={handleSignOut} hitSlop={8}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Sign Out
+          </ThemedText>
+        </Pressable>
+      ),
+    });
+  }, [navigation]);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
