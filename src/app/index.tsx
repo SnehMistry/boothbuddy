@@ -1,98 +1,105 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { useCallback, useState } from 'react';
+import { FlatList, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useFocusEffect } from 'expo-router';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { getEvents } from '@/lib/storage';
+import type { BoothEvent } from '@/lib/types';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+export default function EventsScreen() {
+  const [events, setEvents] = useState<BoothEvent[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      getEvents().then(setEvents);
+    }, []),
   );
-}
 
-export default function HomeScreen() {
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {events.length === 0 ? (
+        <ThemedView style={styles.emptyState}>
+          <ThemedText type="subtitle" style={styles.centerText}>
+            No events yet
+          </ThemedText>
+          <ThemedText themeColor="textSecondary" style={styles.centerText}>
+            Create an event for the career fair or networking session you&apos;re attending, then
+            capture a contact for every person you meet.
           </ThemedText>
         </ThemedView>
+      ) : (
+        <FlatList
+          data={events}
+          keyExtractor={(event) => event.id}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => router.push(`/event/${item.id}`)}
+              style={({ pressed }) => [styles.eventCard, pressed && styles.pressed]}>
+              <ThemedView type="backgroundElement" style={styles.eventCardInner}>
+                <ThemedText type="smallBold">{item.name}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {item.date}
+                  {item.location ? ` · ${item.location}` : ''}
+                </ThemedText>
+              </ThemedView>
+            </Pressable>
+          )}
+        />
+      )}
 
-        <ThemedText type="code" style={styles.code}>
-          get started
+      <Pressable
+        onPress={() => router.push('/new-event')}
+        style={({ pressed }) => [styles.newEventButton, pressed && styles.pressed]}>
+        <ThemedText type="smallBold" style={styles.newEventButtonText}>
+          + New Event
         </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+      </Pressable>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
   },
-  safeArea: {
+  emptyState: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.five,
+    gap: Spacing.two,
   },
-  title: {
+  centerText: {
     textAlign: 'center',
   },
-  code: {
-    textTransform: 'uppercase',
+  list: {
+    padding: Spacing.three,
+    gap: Spacing.two,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  eventCard: {
+    borderRadius: Spacing.three,
+  },
+  eventCardInner: {
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    gap: Spacing.half,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  newEventButton: {
+    backgroundColor: '#3c87f7',
+    marginHorizontal: Spacing.three,
+    marginBottom: Spacing.three,
+    paddingVertical: Spacing.three,
+    borderRadius: Spacing.three,
+    alignItems: 'center',
+  },
+  newEventButtonText: {
+    color: '#ffffff',
   },
 });
