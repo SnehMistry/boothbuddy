@@ -206,3 +206,30 @@ before it's treated as real.
 follow-up message drafting should feed the confirmed research in as context
 so drafts can reference specifics (e.g. a recent company launch, a shared
 alma mater) rather than staying generic.
+
+## Typed notes (input built in Phase 2, AI use planned for Phase 3, 2026-09-24)
+
+A contact can have typed notes as an alternative or addition to the voice
+memo — fast, messy, unstructured text (e.g. "sarah recruiter google cloud
+team, internship apps open oct 15, likes hiking, said email her resume").
+
+**Data model**: `Contact.notes` (`src/lib/types.ts`), a plain optional
+string, mapped to a `notes` column on the `contacts` table
+(`supabase/migrations/20260924000000_add_contact_notes.sql`).
+
+**Capture screen** (`event/[id]/new-contact.tsx`): under the voice memo
+button, a small "or type notes instead" link reveals a multi-line text box.
+Once revealed it stays visible — a contact can end up with a voice memo,
+typed notes, or both, since they're independent fields, not mutually
+exclusive alternatives.
+
+**Contact detail screen** (`contact/[id].tsx`): notes are editable at any
+time (same save-on-blur pattern as name/company URL), so notes can be added
+or fixed up after the fact even if none were typed during capture.
+
+**Phase 3 (not yet built)**: the AI structuring step must treat the voice
+transcript and typed notes as two inputs to combine, not alternatives to
+branch on — use whichever exist (transcript only, notes only, both, or
+neither) and produce the same structured contact card fields regardless. If
+neither exists, structuring still runs on whatever else is available (name,
+photos, business card read).

@@ -36,4 +36,5 @@ export type Contact = {
   audioStoragePath?: string; // path inside the "audio" bucket
   photos: ContactPhoto[];
   companyUrl?: string; // filled by typing, or by scanning a QR code
+  notes?: string; // typed alternative/addition to the voice memo
 };

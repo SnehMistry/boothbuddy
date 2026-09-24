@@ -34,6 +34,8 @@ export default function NewContactScreen() {
   const [name, setName] = useState('');
   const [companyUrl, setCompanyUrl] = useState('');
   const [photos, setPhotos] = useState<ContactPhoto[]>([]);
+  const [notes, setNotes] = useState('');
+  const [notesVisible, setNotesVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
 
@@ -114,6 +116,7 @@ export default function NewContactScreen() {
         audioStoragePath: audioStoragePath ?? undefined,
         photos,
         companyUrl: companyUrl.trim() || undefined,
+        notes: notes.trim() || undefined,
       });
       router.replace(`/event/${eventId}`);
     } catch {
@@ -174,6 +177,28 @@ export default function NewContactScreen() {
           <ThemedText type="small" themeColor="textSecondary" style={styles.confirmText}>
             ✓ Voice memo recorded
           </ThemedText>
+        )}
+
+        {!notesVisible && (
+          <Pressable onPress={() => setNotesVisible(true)} style={styles.textLinkButton}>
+            <ThemedText type="link" themeColor="textSecondary">
+              or type notes instead
+            </ThemedText>
+          </Pressable>
+        )}
+        {notesVisible && (
+          <TextInput
+            autoFocus
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="e.g. sarah, recruiter, google cloud team, internship apps open oct 15, likes hiking, said email her resume"
+            placeholderTextColor={theme.textSecondary}
+            multiline
+            style={[
+              styles.notesInput,
+              { color: theme.text, backgroundColor: theme.backgroundElement },
+            ]}
+          />
         )}
 
         <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
@@ -260,6 +285,20 @@ const styles = StyleSheet.create({
   },
   confirmText: {
     marginTop: Spacing.one,
+  },
+  textLinkButton: {
+    alignItems: 'center',
+    marginTop: Spacing.two,
+    padding: Spacing.two,
+  },
+  notesInput: {
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+    marginTop: Spacing.two,
+    fontSize: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
   scanButton: {
     backgroundColor: '#60646c',

@@ -31,6 +31,7 @@ export default function ContactDetailScreen() {
   const [contact, setContact] = useState<Contact | null>(null);
   const [name, setName] = useState('');
   const [companyUrl, setCompanyUrl] = useState('');
+  const [notes, setNotes] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -39,6 +40,7 @@ export default function ContactDetailScreen() {
         setContact(found);
         setName(found.name);
         setCompanyUrl(found.companyUrl ?? '');
+        setNotes(found.notes ?? '');
       });
     }, [id]),
   );
@@ -71,6 +73,13 @@ export default function ContactDetailScreen() {
     const trimmed = companyUrl.trim();
     if (!contact || trimmed === (contact.companyUrl ?? '')) return;
     const updated = await updateContact(contact.id, { companyUrl: trimmed || undefined });
+    if (updated) setContact(updated);
+  };
+
+  const saveNotes = async () => {
+    const trimmed = notes.trim();
+    if (!contact || trimmed === (contact.notes ?? '')) return;
+    const updated = await updateContact(contact.id, { notes: trimmed || undefined });
     if (updated) setContact(updated);
   };
 
@@ -138,6 +147,22 @@ export default function ContactDetailScreen() {
       )}
 
       <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
+        Notes
+      </ThemedText>
+      <TextInput
+        value={notes}
+        onChangeText={setNotes}
+        onBlur={saveNotes}
+        placeholder="Type quick notes about this person or conversation…"
+        placeholderTextColor={theme.textSecondary}
+        multiline
+        style={[
+          styles.notesInput,
+          { color: theme.text, backgroundColor: theme.backgroundElement },
+        ]}
+      />
+
+      <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
         Company URL
       </ThemedText>
       <TextInput
@@ -179,6 +204,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     fontSize: 16,
+  },
+  notesInput: {
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+    fontSize: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
   playButton: {
     backgroundColor: '#3c87f7',
