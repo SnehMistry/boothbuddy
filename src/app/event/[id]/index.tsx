@@ -64,7 +64,6 @@ export default function EventTimelineScreen() {
                 <ThemedText type="smallBold">{item.name || 'Unnamed contact'}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   {formatTime(item.createdAt)}
-                  {item.audioStoragePath ? ' · 🎙️' : ''}
                   {item.photos.length > 0 ? ` · 📷×${item.photos.length}` : ''}
                 </ThemedText>
               </ThemedView>

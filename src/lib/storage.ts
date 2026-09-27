@@ -15,7 +15,6 @@ type ContactRow = {
   id: string;
   event_id: string;
   name: string;
-  audio_path: string | null;
   company_url: string | null;
   notes: string | null;
   created_at: string;
@@ -54,7 +53,6 @@ function contactFromRow(row: ContactRow, photos: ContactPhoto[]): Contact {
     eventId: row.event_id,
     name: row.name,
     createdAt: row.created_at,
-    audioStoragePath: row.audio_path ?? undefined,
     companyUrl: row.company_url ?? undefined,
     notes: row.notes ?? undefined,
     photos,
@@ -141,7 +139,6 @@ export async function createContact(input: Omit<Contact, 'id' | 'createdAt'>): P
       id: contactId,
       event_id: input.eventId,
       name: input.name,
-      audio_path: input.audioStoragePath ?? null,
       company_url: input.companyUrl ?? null,
       notes: input.notes ?? null,
     })
@@ -176,7 +173,6 @@ export async function updateContact(
   const updates: Record<string, unknown> = {};
   if (patch.name !== undefined) updates.name = patch.name;
   if (patch.companyUrl !== undefined) updates.company_url = patch.companyUrl ?? null;
-  if (patch.audioStoragePath !== undefined) updates.audio_path = patch.audioStoragePath ?? null;
   if (patch.notes !== undefined) updates.notes = patch.notes ?? null;
 
   const { error } = await supabase.from('contacts').update(updates).eq('id', id);

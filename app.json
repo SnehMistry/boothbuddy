@@ -34,12 +34,6 @@
         }
       ],
       [
-        "expo-audio",
-        {
-          "microphonePermission": "BoothBuddy uses your microphone to record a quick voice memo summarizing your conversation."
-        }
-      ],
-      [
         "expo-camera",
         {
           "cameraPermission": "BoothBuddy uses your camera to photograph business cards, badges, and QR codes."

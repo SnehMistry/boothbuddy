@@ -233,3 +233,120 @@ branch on — use whichever exist (transcript only, notes only, both, or
 neither) and produce the same structured contact card fields regardless. If
 neither exists, structuring still runs on whatever else is available (name,
 photos, business card read).
+
+**Superseded 2026-09-26**: see "Audio removed" below — there is no voice
+transcript anymore. Typed notes are now the primary input, alongside photos,
+company URL, and name.
+
+## Audio removed — typed notes is the main input now (2026-09-26)
+
+Voice memo recording/playback never worked reliably and has been dropped
+entirely, along with all supporting code:
+- `expo-audio` dependency and its `app.json` plugin config.
+- Recording UI and playback UI (`new-contact.tsx`, `contact/[id].tsx`).
+- `uploadCapturedFile`/storage helpers' `'audio'` bucket case (`files.ts`).
+- `Contact.audioStoragePath`, the `contacts.audio_path` column, and the
+  `audio` Storage bucket + its RLS policies (dropped via a new migration,
+  not edited into the original one).
+- Every other reference to "voice memo" / transcription in the original
+  spec above and in the README is superseded by this section.
+
+**New capture screen** (`event/[id]/new-contact.tsx`): four inputs, in this
+order —
+1. **Typed notes** — a big multi-line text box, always visible (not behind
+   an "or type notes instead" toggle anymore), since it's now the main way
+   conversation details get captured. The user dictates into it with their
+   keyboard's built-in mic when they want to speak instead of type — the
+   app itself does no audio capture or transcription.
+2. **Photos** — multiple, labeled (unchanged from the existing
+   `PhotoPicker` component).
+3. **Company URL** — typed or QR-scanned (unchanged).
+4. **Name** (unchanged).
+
+## $0 budget — no paid APIs, ever (2026-09-26)
+
+This project must not cost anything to run. This supersedes the original
+spec's choice of OpenAI (speech-to-text — moot now, see above) and
+Anthropic Claude (structuring/vision/drafting) as AI providers.
+
+- **All AI calls use the Google Gemini API free tier** (Flash models —
+  cheapest/fastest, sufficient for this app's needs). One provider for
+  everything: contact structuring, business card/photo reading, person &
+  company research, job finding, and message drafting.
+- The Gemini key is a Supabase secret, `GEMINI_API_KEY`, already set on the
+  project. It is used only inside Supabase Edge Functions — the app itself
+  never sees it or calls Gemini directly, same reasoning as the original
+  spec's "API keys never live in the app" rule.
+- The free tier is rate-limited (low requests-per-minute). Edge Functions
+  must: retry with exponential backoff on HTTP 429, process contacts one at
+  a time (no batch/parallel AI calls), and surface a clear "AI busy,
+  retrying…" state to the user instead of failing outright.
+- No other paid service of any kind: no paid Supabase tier, no paid hosting,
+  no paid third-party API. Free tiers only (Supabase free project, Vercel/
+  Netlify free hosting, Gemini free tier).
+
+## Phase 3 — AI pipeline, full spec (2026-09-26)
+
+For each saved contact, a Supabase Edge Function sends Gemini everything
+available for that contact — typed notes, photos, company URL, name — and
+fills in the structured contact card:
+name, title, company, email, LinkedIn URL, summary, topics discussed,
+roles/opportunities mentioned, deadlines, action items, something
+memorable, and an interest level (Hot/Warm/Cold).
+
+- **Business card / badge / booth photo reading**: Gemini's vision input
+  reads uploaded photos to fill in fields missing from the typed notes
+  (name, title, company, email, LinkedIn URL, etc.).
+- **Person & company research**: use Gemini's Google Search grounding tool
+  if the free tier supports it (check current Gemini API docs for
+  grounding availability/limits on the free tier before building this —
+  don't assume). If grounding isn't available on the free tier, research
+  using the model's own knowledge instead and **clearly label the result as
+  ungrounded / not live-searched** so the user knows not to trust it as
+  current. Either way: include a source link for every fact stated (when
+  grounded), a confidence level on the person match ("high" /
+  "possibly the wrong person"), and require the user to confirm or reject
+  the match before it's treated as real — this carries over the match-
+  confidence requirement from the original Person & Company research spec
+  above, which this section supersedes with the Gemini-only implementation.
+- **Job/internship finding**: as part of the same research step, find
+  relevant open jobs/internships at the contact's company, with application
+  links and deadlines where the search can find them.
+- **Reprocessing**: a "Reprocess with AI" button on the contact card re-runs
+  this whole pipeline — for when the user edits notes or adds photos after
+  the first pass. Same one-at-a-time, retry-with-backoff rules apply.
+- Cache results on the contact; don't silently re-run research just from
+  reopening the card (carried over from the original spec).
+
+## Phase 4 — End-of-Day recap, full spec (2026-09-26)
+
+An "End of Day" screen per event — everything needed to act on that
+night's contacts in one place:
+
+- **Per person**: a LinkedIn connection note (under 300 characters) and a
+  longer follow-up message, both referencing specifics from the actual
+  conversation (from notes/photos/research, not generic). Each has: Copy,
+  Regenerate, tone options (casual / professional / enthusiastic), "Open
+  LinkedIn" (their profile URL if known, otherwise a LinkedIn people-search
+  link for name + company — never automate LinkedIn sending or scraping),
+  and a status control: Not sent / Sent / Replied.
+- **Optional follow-up email draft**, generated only if an email address
+  was found for that contact.
+- **Jobs to apply for checklist**: every job/internship found in Phase 3
+  research across the event's contacts, with links and deadlines, sorted by
+  deadline, each with an Applied checkbox.
+- **Action items checklist**: all action items pulled from every contact
+  at the event (e.g. "send resume", "email the recruiter"), so nothing
+  gets missed.
+
+## Phases 5 & 7 simplified; most of Phase 6 skipped (2026-09-26)
+
+- **Phase 5 (web dashboard)**: focus specifically on making the web app a
+  good dashboard for the End-of-Day recap (Phase 4) — that's the primary
+  "review at night" use case, more than a general contacts table.
+- **Phase 6 (extras)**: skip all of it except search, and only if it's
+  quick to add once Phase 5 exists. Offline queue, reminders, pre-event
+  prep, CSV export, and stats are out of scope for now.
+- **Phase 7 (polish/deploy)**: deploy the web app free on Vercel or
+  Netlify, and polish `README.md` since it's going on the user's resume —
+  no other changes to Phase 7's original scope.

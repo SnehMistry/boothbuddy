@@ -10,12 +10,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import {
-  AudioModule,
-  RecordingPresets,
-  useAudioRecorder,
-  useAudioRecorderState,
-} from 'expo-audio';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 
 import { PhotoPicker } from '@/components/photo-picker';
@@ -23,7 +17,6 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { extensionFromUri, uploadCapturedFile } from '@/lib/files';
 import { createContact } from '@/lib/storage';
 import type { ContactPhoto, PhotoLabel } from '@/lib/types';
 
@@ -35,52 +28,12 @@ export default function NewContactScreen() {
   const [companyUrl, setCompanyUrl] = useState('');
   const [photos, setPhotos] = useState<ContactPhoto[]>([]);
   const [notes, setNotes] = useState('');
-  const [notesVisible, setNotesVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
-
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(recorder);
-  // Already a Supabase Storage path by the time it's set here — see
-  // handleStopRecording. Never store the recorder's raw local uri.
-  const [audioStoragePath, setAudioStoragePath] = useState<string | null>(null);
-  const [savingAudio, setSavingAudio] = useState(false);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const canSave = name.trim().length > 0 && !saving;
-
-  const handleStartRecording = async () => {
-    const { granted } = await AudioModule.requestRecordingPermissionsAsync();
-    if (!granted) {
-      Alert.alert('Microphone access needed', 'Enable microphone access to record a voice memo.');
-      return;
-    }
-    setAudioStoragePath(null);
-    await recorder.prepareToRecordAsync();
-    recorder.record();
-  };
-
-  const handleStopRecording = async () => {
-    await recorder.stop();
-    const tempUri = recorder.uri;
-    if (!tempUri) return;
-
-    // Upload right away — the recording's cache file can be cleared by the
-    // OS within seconds, especially on Android.
-    setSavingAudio(true);
-    try {
-      const path = await uploadCapturedFile('audio', tempUri, extensionFromUri(tempUri, 'm4a'));
-      setAudioStoragePath(path);
-    } catch {
-      Alert.alert(
-        "Couldn't save recording",
-        'Something went wrong saving that voice memo. Please try recording it again.',
-      );
-    } finally {
-      setSavingAudio(false);
-    }
-  };
 
   const openScanner = async () => {
     if (!cameraPermission?.granted) {
@@ -108,12 +61,11 @@ export default function NewContactScreen() {
     if (!canSave) return;
     setSaving(true);
     try {
-      // Audio and photos are already uploaded to Supabase Storage as they
-      // were captured, so this is just writing the contact record itself.
+      // Photos are already uploaded to Supabase Storage as they were
+      // captured, so this is just writing the contact record itself.
       await createContact({
         eventId,
         name: name.trim(),
-        audioStoragePath: audioStoragePath ?? undefined,
         photos,
         companyUrl: companyUrl.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -122,7 +74,7 @@ export default function NewContactScreen() {
     } catch {
       Alert.alert(
         "Couldn't save contact",
-        'Something went wrong saving this contact. Your voice memo and photos are safe — please try Save again.',
+        'Something went wrong saving this contact. Your photos are safe — please try Save again.',
       );
       setSaving(false);
     }
@@ -155,51 +107,21 @@ export default function NewContactScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container}>
         <ThemedText type="small" themeColor="textSecondary">
-          Voice memo — ramble for ~60 seconds about the conversation
+          Notes — e.g. sarah, recruiter, google cloud team, internship apps open oct 15, likes
+          hiking, said email her resume. Use your keyboard&apos;s dictation mic to speak instead
+          of type.
         </ThemedText>
-        <Pressable
-          onPress={recorderState.isRecording ? handleStopRecording : handleStartRecording}
-          disabled={savingAudio}
-          style={({ pressed }) => [
-            styles.bigButton,
-            recorderState.isRecording && styles.bigButtonRecording,
-            pressed && styles.pressed,
-          ]}>
-          <ThemedText type="smallBold" style={styles.bigButtonText}>
-            {savingAudio
-              ? 'Saving recording…'
-              : recorderState.isRecording
-                ? '⏹ Stop Recording'
-                : '🎙️ Record Voice Memo'}
-          </ThemedText>
-        </Pressable>
-        {audioStoragePath && !recorderState.isRecording && !savingAudio && (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.confirmText}>
-            ✓ Voice memo recorded
-          </ThemedText>
-        )}
-
-        {!notesVisible && (
-          <Pressable onPress={() => setNotesVisible(true)} style={styles.textLinkButton}>
-            <ThemedText type="link" themeColor="textSecondary">
-              or type notes instead
-            </ThemedText>
-          </Pressable>
-        )}
-        {notesVisible && (
-          <TextInput
-            autoFocus
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="e.g. sarah, recruiter, google cloud team, internship apps open oct 15, likes hiking, said email her resume"
-            placeholderTextColor={theme.textSecondary}
-            multiline
-            style={[
-              styles.notesInput,
-              { color: theme.text, backgroundColor: theme.backgroundElement },
-            ]}
-          />
-        )}
+        <TextInput
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Type or dictate notes about this person or conversation…"
+          placeholderTextColor={theme.textSecondary}
+          multiline
+          style={[
+            styles.notesInput,
+            { color: theme.text, backgroundColor: theme.backgroundElement },
+          ]}
+        />
 
         <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
           Photos — business card, badge, booth, brochure
@@ -270,26 +192,9 @@ const styles = StyleSheet.create({
   sectionSpacing: {
     marginTop: Spacing.four,
   },
-  bigButton: {
-    backgroundColor: '#3c87f7',
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.three,
-    alignItems: 'center',
-  },
-  bigButtonRecording: {
-    backgroundColor: '#e0483e',
-  },
   bigButtonText: {
     color: '#ffffff',
     fontSize: 17,
-  },
-  confirmText: {
-    marginTop: Spacing.one,
-  },
-  textLinkButton: {
-    alignItems: 'center',
-    marginTop: Spacing.two,
-    padding: Spacing.two,
   },
   notesInput: {
     borderRadius: Spacing.two,

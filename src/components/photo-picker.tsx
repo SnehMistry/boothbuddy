@@ -47,7 +47,7 @@ function PhotoImage({
   useEffect(() => {
     if (localPreviewUri) return;
     let cancelled = false;
-    getSignedUrl('photos', photo.storagePath)
+    getSignedUrl(photo.storagePath)
       .then((url) => {
         if (!cancelled) setSignedUrl(url);
       })
@@ -87,7 +87,7 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
   const uploadAndAdd = async (localUri: string) => {
     const id = Crypto.randomUUID();
     try {
-      const storagePath = await uploadCapturedFile('photos', localUri, extensionFromUri(localUri, 'jpg'));
+      const storagePath = await uploadCapturedFile(localUri, extensionFromUri(localUri, 'jpg'));
       setLocalPreviews((prev) => ({ ...prev, [id]: localUri }));
       onAdd({ id, storagePath, createdAt: new Date().toISOString() });
       return true;
@@ -156,7 +156,7 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
   const removePhoto = (photo: ContactPhoto) => {
     // Best-effort: don't block removing a photo from the contact just
     // because deleting the underlying file failed.
-    deleteStorageFile('photos', photo.storagePath).catch(() => {});
+    deleteStorageFile(photo.storagePath).catch(() => {});
     setLocalPreviews((prev) => {
       const next = { ...prev };
       delete next[photo.id];

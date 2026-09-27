@@ -3,6 +3,46 @@
 Working log for picking this project back up. See `README.md` for the
 overall roadmap and `PROMPT.md` for detailed feature specs.
 
+## Status as of 2026-09-26
+
+### Phase 2 confirmed working
+User confirmed on-device: events/contacts sync to Supabase (Postgres +
+Storage) and the same data shows up on the web build. Phase 2 is checked
+off in `README.md`.
+
+### Change 1 — audio removed completely
+Voice memo recording/playback didn't work reliably and has been dropped
+for good, per `PROMPT.md`'s "Audio removed" section:
+- Removed the `expo-audio` dependency, its `app.json` plugin config, the
+  recording UI (`new-contact.tsx`) and playback UI (`contact/[id].tsx`).
+- `src/lib/files.ts` no longer takes a `bucket` parameter at all — `photos`
+  is the only Storage bucket now, so the parameter was dead weight, not
+  just a smaller enum.
+- `Contact.audioStoragePath` and the `contacts.audio_path` column are gone
+  (migration `20260926000000_remove_audio.sql`, applied to the live
+  Supabase project via `supabase db push`).
+- **Known loose end**: that migration does NOT drop the `audio` Storage
+  bucket itself. Postgres refuses direct `DELETE`/`DROP` against
+  `storage.objects`/`storage.buckets` ("Direct deletion from storage
+  tables is not allowed. Use the Storage API instead."), and the bucket
+  still has one leftover test recording that the `supabase` CLI's
+  experimental `storage rm` command silently failed to delete (returned
+  `{"deleted":[]}` with no error — looks like a CLI bug, not investigated
+  further). The app no longer reads or writes this bucket either way, so
+  it's harmless to leave. To actually remove it: Supabase dashboard →
+  Storage → delete the one file in `audio/`, then delete the `audio`
+  bucket.
+- The capture screen (`event/[id]/new-contact.tsx`) now shows notes as an
+  always-visible big text box (no more "or type notes instead" toggle) —
+  it's the main input, per the updated spec.
+- Verified: `npx tsc --noEmit` clean, `npx expo lint` clean (one
+  pre-existing, unrelated error in `use-color-scheme.web.ts` predates this
+  change — confirmed via `git stash`), and `npx expo export --platform web`
+  bundles successfully.
+- **Not yet tested on-device** — next step is to run the app on the Samsung
+  device, create a contact with notes + photos + company URL + name, and
+  confirm Save/sync still works with audio gone.
+
 ## Status as of 2026-09-23
 
 ### Done and verified on-device
@@ -67,6 +107,6 @@ harmless and can be ignored (or the app reinstalled for a clean slate).
    the **person & company research** feature spec'd in `PROMPT.md` — not
    started yet, no code exists for it.
 
-## Repo state
-Everything above is committed and pushed to `main` as of commit `db57fc7`.
-Nothing is stashed or uncommitted.
+## Repo state (as of 2026-09-23 section above)
+Everything up to that point was committed and pushed to `main` as of commit
+`db57fc7`. See the top of this file for what's changed since.

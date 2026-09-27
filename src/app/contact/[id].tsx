@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
 import { PhotoPicker } from '@/components/photo-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { getSignedUrl } from '@/lib/files';
 import {
   addPhotoToContact,
   getContact,
@@ -44,21 +42,6 @@ export default function ContactDetailScreen() {
       });
     }, [id]),
   );
-
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!contact?.audioStoragePath) return;
-    let cancelled = false;
-    getSignedUrl('audio', contact.audioStoragePath).then((url) => {
-      if (!cancelled) setAudioUrl(url);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [contact?.audioStoragePath]);
-
-  const player = useAudioPlayer(audioUrl);
-  const playerStatus = useAudioPlayerStatus(player);
 
   // Save on blur rather than on every keystroke, so we're not writing to
   // storage on every character typed.
@@ -131,21 +114,6 @@ export default function ContactDetailScreen() {
         onLabelChange={handleLabelChange}
       />
 
-      {contact.audioStoragePath && (
-        <>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
-            Voice memo
-          </ThemedText>
-          <Pressable
-            onPress={() => (playerStatus.playing ? player.pause() : player.play())}
-            style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}>
-            <ThemedText type="smallBold" style={styles.playButtonText}>
-              {playerStatus.playing ? '⏸ Pause' : '▶ Play voice memo'}
-            </ThemedText>
-          </Pressable>
-        </>
-      )}
-
       <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
         Notes
       </ThemedText>
@@ -212,18 +180,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     minHeight: 100,
     textAlignVertical: 'top',
-  },
-  playButton: {
-    backgroundColor: '#3c87f7',
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.three,
-    alignItems: 'center',
-  },
-  playButtonText: {
-    color: '#ffffff',
-  },
-  pressed: {
-    opacity: 0.7,
   },
   notice: {
     marginTop: Spacing.six,

@@ -33,8 +33,7 @@ export type Contact = {
   eventId: string;
   name: string;
   createdAt: string; // ISO timestamp; also the timeline sort key
-  audioStoragePath?: string; // path inside the "audio" bucket
   photos: ContactPhoto[];
   companyUrl?: string; // filled by typing, or by scanning a QR code
-  notes?: string; // typed alternative/addition to the voice memo
+  notes?: string; // typed notes about the conversation — the main text input
 };
