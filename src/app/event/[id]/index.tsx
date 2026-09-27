@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet } from 'react-native';
+import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filter';
+import { useTheme } from '@/hooks/use-theme';
 import { getContactsForEvent, getEvent } from '@/lib/storage';
-import type { BoothEvent, Contact } from '@/lib/types';
+import { INTEREST_LEVELS, type BoothEvent, type Contact } from '@/lib/types';
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -20,11 +22,21 @@ const AI_STATUS_BADGES: Record<Contact['aiStatus'], string> = {
   error: ' · ⚠️ AI failed',
 };
 
+const INTEREST_FILTER_LABELS: Record<InterestFilter, string> = {
+  all: 'All',
+  hot: '🔥 Hot',
+  warm: '🌤️ Warm',
+  cold: '❄️ Cold',
+};
+
 export default function EventTimelineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
+  const theme = useTheme();
   const [event, setEvent] = useState<BoothEvent | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const { filtered, search, setSearch, interestFilter, setInterestFilter } =
+    useContactFilter(contacts);
 
   useFocusEffect(
     useCallback(() => {
@@ -82,25 +94,52 @@ export default function EventTimelineScreen() {
           </ThemedText>
         </ThemedView>
       ) : (
-        <FlatList
-          data={contacts}
-          keyExtractor={(contact) => contact.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => router.push(`/contact/${item.id}`)}
-              style={({ pressed }) => [styles.contactCard, pressed && styles.pressed]}>
-              <ThemedView type="backgroundElement" style={styles.contactCardInner}>
-                <ThemedText type="smallBold">{item.name || 'Unnamed contact'}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {formatTime(item.createdAt)}
-                  {item.photos.length > 0 ? ` · 📷×${item.photos.length}` : ''}
-                  {AI_STATUS_BADGES[item.aiStatus]}
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
+        <>
+          <ThemedView style={styles.searchBar}>
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search name or company…"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.searchInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+            />
+            <ThemedView style={styles.filterRow}>
+              {(['all', ...INTEREST_LEVELS] as InterestFilter[]).map((level) => (
+                <Pressable
+                  key={level}
+                  onPress={() => setInterestFilter(level)}
+                  style={[styles.filterChip, interestFilter === level && styles.filterChipSelected]}>
+                  <ThemedText type="small">{INTEREST_FILTER_LABELS[level]}</ThemedText>
+                </Pressable>
+              ))}
+            </ThemedView>
+          </ThemedView>
+          {filtered.length === 0 ? (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+              No contacts match.
+            </ThemedText>
+          ) : (
+            <FlatList
+              data={filtered}
+              keyExtractor={(contact) => contact.id}
+              contentContainerStyle={styles.list}
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() => router.push(`/contact/${item.id}`)}
+                  style={({ pressed }) => [styles.contactCard, pressed && styles.pressed]}>
+                  <ThemedView type="backgroundElement" style={styles.contactCardInner}>
+                    <ThemedText type="smallBold">{item.name || 'Unnamed contact'}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {formatTime(item.createdAt)}
+                      {item.photos.length > 0 ? ` · 📷×${item.photos.length}` : ''}
+                      {AI_STATUS_BADGES[item.aiStatus]}
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+              )}
+            />
           )}
-        />
+        </>
       )}
 
       <Pressable
@@ -131,6 +170,33 @@ const styles = StyleSheet.create({
   },
   centerText: {
     textAlign: 'center',
+  },
+  searchBar: {
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.two,
+    gap: Spacing.two,
+  },
+  searchInput: {
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    fontSize: 16,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  filterChip: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    borderRadius: Spacing.five,
+    borderWidth: 1,
+    borderColor: '#60646c55',
+  },
+  filterChipSelected: {
+    borderColor: '#3c87f7',
+    borderWidth: 2,
   },
   list: {
     padding: Spacing.three,

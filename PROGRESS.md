@@ -72,6 +72,48 @@ Migration pushed, function deployed and `ACTIVE`. **Not yet tested
 on-device**, same constraint as Phase 3 above — needs a real signed-in
 session to exercise the Gemini call.
 
+### Web dashboard — desktop layout
+Per the original spec's platform split ("Mobile: capture-focused... Web:
+review-focused dashboard"). Uses Expo Router's platform-specific file
+convention (`.web.tsx` overrides) rather than `Platform.OS` branching
+inside shared files, so mobile's screens are completely untouched by this
+— `_layout.tsx`/`event/[id]/index.tsx`/`index.tsx` still render exactly as
+before on iOS/Android.
+
+- `_layout.web.tsx`: web-only root layout — a persistent left sidebar
+  (`web-sidebar.tsx`: event list, + New Event, Sign Out) next to the same
+  `Stack` native uses, instead of full-screen push navigation.
+- `index.web.tsx`: landing pane shown before an event is selected (the
+  events list itself moved into the sidebar).
+- `event/[id]/index.web.tsx`: the actual "dashboard" — a contacts table
+  (name/company/interest/AI status) on the left, and clicking a row opens
+  a side-by-side detail panel on the right with the AI-structured card,
+  research/match-confirmation, and the **same `FollowupCard` component**
+  used by the mobile End-of-Day screen (extracted to
+  `components/followup-card.tsx` specifically so the drafting UI isn't
+  duplicated between platforms). A "New Contact" and "End of Day →" link
+  reuse the existing shared routes as-is.
+- Full editing (notes, photos, raw fields) stays on the existing
+  `contact/[id]` screen — the web panel links out to it ("Edit notes,
+  photos & raw details →") rather than re-implementing that editor, since
+  the dashboard's job is reviewing/drafting, not re-capturing.
+
+### Search — `use-contact-filter.ts`
+A small shared hook (name/company substring + interest-level filter,
+client-side — an event's contact list is small enough that this doesn't
+need a server query) used by both the mobile timeline's new search bar and
+the web table's search bar, so filtering logic isn't duplicated per
+platform.
+
+**Verified**: `npx tsc --noEmit` and `npx expo lint` clean, `npx expo
+export --platform web` bundles. **Could not runtime-test the web
+dashboard in a real browser** — no browser automation tool (chromium-cli,
+Playwright, claude-in-chrome) is available in this environment, and
+installing Playwright fresh would mean downloading Chromium binaries with
+no clear time budget. Static checks (typecheck, lint, bundling) all pass,
+but the sidebar/table/panel layout has not been visually confirmed to
+render correctly — this needs a real look in a browser.
+
 ## Status as of 2026-09-27
 
 ### Phase 3 — AI pipeline (Gemini), built and deployed
