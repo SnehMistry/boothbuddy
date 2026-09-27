@@ -72,6 +72,12 @@ export type JobOpportunity = {
   createdAt: string;
 };
 
+export const FOLLOWUP_TONES = ['casual', 'professional', 'enthusiastic'] as const;
+export type FollowupTone = (typeof FOLLOWUP_TONES)[number];
+
+export const FOLLOWUP_STATUSES = ['not_sent', 'sent', 'replied'] as const;
+export type FollowupStatus = (typeof FOLLOWUP_STATUSES)[number];
+
 export type Contact = {
   id: string;
   eventId: string;
@@ -96,4 +102,12 @@ export type Contact = {
   memorable?: string;
   interestLevel?: InterestLevel;
   research?: ContactResearch;
+
+  // Follow-up drafts (Phase 4) — unset until generated once.
+  linkedinNote?: string;
+  linkedinMessage?: string;
+  emailDraft?: string;
+  followupTone: FollowupTone;
+  followupStatus: FollowupStatus;
+  followupGeneratedAt?: string;
 };

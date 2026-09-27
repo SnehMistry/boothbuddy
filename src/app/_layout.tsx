@@ -27,6 +27,7 @@ export default function RootLayout() {
             name="event/[id]/new-contact"
             options={{ title: 'New Contact', presentation: 'modal' }}
           />
+          <Stack.Screen name="event/[id]/end-of-day" options={{ title: 'End of Day' }} />
           <Stack.Screen name="contact/[id]" options={{ title: 'Contact' }} />
         </Stack>
       ) : (

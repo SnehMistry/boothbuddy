@@ -30,7 +30,18 @@ export default function EventTimelineScreen() {
     useCallback(() => {
       getEvent(id).then((found) => {
         setEvent(found ?? null);
-        if (found) navigation.setOptions({ title: found.name });
+        if (found) {
+          navigation.setOptions({
+            title: found.name,
+            headerRight: () => (
+              <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)} hitSlop={8}>
+                <ThemedText type="link" themeColor="textSecondary">
+                  End of Day
+                </ThemedText>
+              </Pressable>
+            ),
+          });
+        }
       });
       getContactsForEvent(id).then(setContacts);
     }, [id, navigation]),

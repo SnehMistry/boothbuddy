@@ -8,6 +8,8 @@ import type {
   Contact,
   ContactPhoto,
   ContactResearch,
+  FollowupStatus,
+  FollowupTone,
   InterestLevel,
   JobOpportunity,
   PhotoLabel,
@@ -42,6 +44,12 @@ type ContactRow = {
   ai_error: string | null;
   ai_processed_at: string | null;
   research: ContactResearch | null;
+  linkedin_note: string | null;
+  linkedin_message: string | null;
+  email_draft: string | null;
+  followup_tone: FollowupTone;
+  followup_status: FollowupStatus;
+  followup_generated_at: string | null;
 };
 
 type ActionItemRow = {
@@ -112,6 +120,12 @@ function contactFromRow(row: ContactRow, photos: ContactPhoto[]): Contact {
     memorable: row.memorable ?? undefined,
     interestLevel: row.interest_level ?? undefined,
     research: row.research ?? undefined,
+    linkedinNote: row.linkedin_note ?? undefined,
+    linkedinMessage: row.linkedin_message ?? undefined,
+    emailDraft: row.email_draft ?? undefined,
+    followupTone: row.followup_tone,
+    followupStatus: row.followup_status,
+    followupGeneratedAt: row.followup_generated_at ?? undefined,
   };
 }
 
@@ -257,6 +271,7 @@ export async function updateContact(
   if (patch.companyUrl !== undefined) updates.company_url = patch.companyUrl ?? null;
   if (patch.notes !== undefined) updates.notes = patch.notes ?? null;
   if (patch.interestLevel !== undefined) updates.interest_level = patch.interestLevel ?? null;
+  if (patch.followupStatus !== undefined) updates.followup_status = patch.followupStatus;
 
   const { error } = await supabase.from('contacts').update(updates).eq('id', id);
   if (error) throw error;
@@ -329,6 +344,21 @@ export async function getActionItemsForContact(contactId: string): Promise<Actio
   return (data as ActionItemRow[]).map(actionItemFromRow);
 }
 
+// For the Phase 4 End-of-Day recap, which aggregates every contact's action
+// items/jobs across a whole event — action_items/job_opportunities only
+// store contact_id, not event_id, so the caller passes the event's contact
+// ids (from getContactsForEvent) rather than this module doing a join.
+export async function getActionItemsForContacts(contactIds: string[]): Promise<ActionItem[]> {
+  if (contactIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('action_items')
+    .select('*')
+    .in('contact_id', contactIds)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data as ActionItemRow[]).map(actionItemFromRow);
+}
+
 export async function setActionItemDone(id: string, done: boolean): Promise<void> {
   const { error } = await supabase.from('action_items').update({ done }).eq('id', id);
   if (error) throw error;
@@ -344,9 +374,33 @@ export async function getJobsForContact(contactId: string): Promise<JobOpportuni
   return (data as JobOpportunityRow[]).map(jobFromRow);
 }
 
+export async function getJobsForContacts(contactIds: string[]): Promise<JobOpportunity[]> {
+  if (contactIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('job_opportunities')
+    .select('*')
+    .in('contact_id', contactIds)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data as JobOpportunityRow[]).map(jobFromRow);
+}
+
 export async function setJobApplied(id: string, applied: boolean): Promise<void> {
   const { error } = await supabase.from('job_opportunities').update({ applied }).eq('id', id);
   if (error) throw error;
+}
+
+// FunctionsHttpError's body is the JSON { error: message } every Edge
+// Function in this app returns on failure — surface that instead of the
+// generic "Edge Function returned a non-2xx status code".
+async function invokeFunction<T>(name: string, body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(name, { body });
+  if (error) {
+    const context = (error as { context?: Response }).context;
+    const detail = await context?.json?.().catch(() => null);
+    throw new Error(detail?.error ?? error.message);
+  }
+  return data as T;
 }
 
 // Kicks off the Phase 3 Edge Function: structures the contact card, reads
@@ -363,21 +417,30 @@ export async function processContact(contactId: string): Promise<{
   actionItems: ActionItem[];
   jobs: JobOpportunity[];
 }> {
-  const { data, error } = await supabase.functions.invoke('process-contact', {
-    body: { contactId },
-  });
-  if (error) {
-    // FunctionsHttpError's body is the JSON { error: message } this
-    // function's edge function returns on failure — surface that instead
-    // of the generic "Edge Function returned a non-2xx status code".
-    const context = (error as { context?: Response }).context;
-    const detail = await context?.json?.().catch(() => null);
-    throw new Error(detail?.error ?? error.message);
-  }
+  const data = await invokeFunction<{
+    contact: ContactRow;
+    actionItems: ActionItemRow[];
+    jobs: JobOpportunityRow[];
+  }>('process-contact', { contactId });
 
   return {
-    contact: contactFromRow(data.contact as ContactRow, []),
-    actionItems: (data.actionItems as ActionItemRow[]).map(actionItemFromRow),
-    jobs: (data.jobs as JobOpportunityRow[]).map(jobFromRow),
+    contact: contactFromRow(data.contact, []),
+    actionItems: data.actionItems.map(actionItemFromRow),
+    jobs: data.jobs.map(jobFromRow),
   };
+}
+
+// Kicks off the Phase 4 Edge Function: drafts a LinkedIn note, a longer
+// LinkedIn message, and (if an email is on file) a follow-up email. Cheaper
+// and faster than processContact — one Gemini call, no photos, no search —
+// so callers can reasonably await this one directly.
+export async function generateFollowup(
+  contactId: string,
+  tone?: FollowupTone,
+): Promise<Contact> {
+  const data = await invokeFunction<{ contact: ContactRow }>('generate-followup', {
+    contactId,
+    tone,
+  });
+  return contactFromRow(data.contact, []);
 }

@@ -3,6 +3,75 @@
 Working log for picking this project back up. See `README.md` for the
 overall roadmap and `PROMPT.md` for detailed feature specs.
 
+## Autonomous run — 2026-09-28
+
+User asked for the rest of the project (Phase 3 verification through
+deployment and polish) to be finished in one autonomous pass, stopping only
+for things that genuinely need them, batched into one final report. This
+section and the ones below record that run as it happens.
+
+### Phase 3 verification — blocked on self-testing, not on the code
+Tried to verify the deployed `process-contact` function end-to-end before
+moving on, as asked. Two safe self-test paths were available and both are
+closed:
+- **Disposable test account via public sign-up**: the project has public
+  sign-ups disabled (`{"error_code":"signup_disabled"}` from `/auth/v1/signup`
+  even with a throwaway `@example.com` address) — almost certainly
+  intentional, since this is a single-user personal app. Didn't try to
+  re-enable it, since flipping a security-relevant Auth setting on a live
+  project without asking isn't a call to make unilaterally.
+- **service_role key for an admin-created test user**: the sandbox's
+  command classifier blocks embedding that key in a Bash command
+  ("Credential Materialization") — hit this earlier in the audio-cleanup
+  work too. Piping it through `jq`/`export` to avoid literally typing it
+  would still expose it in the tool output, which is the same risk the
+  restriction exists to prevent, so didn't route around it.
+- The CLI in this environment also has no `functions invoke` or
+  `functions logs` subcommand to fall back on.
+
+What *was* verified without any real user session: the function deploys,
+`supabase functions list` shows it `ACTIVE` with `verify_jwt: true`, and a
+careful re-read of `process-contact/index.ts` and `_shared/gemini.ts`
+against the Gemini API docs fetched while building Phase 3. No bugs found
+on re-read. **This still needs one real on-device test** — see the
+checklist in the final summary.
+
+### Phase 4 — End-of-Day recap, built and deployed
+Implements PROMPT.md's "Phase 4 — End-of-Day recap, full spec".
+
+**New Edge Function** `generate-followup`: drafts a LinkedIn connection
+note (hard-capped at 300 chars server-side, not just prompted), a longer
+follow-up message, and an email draft (only kept if the contact has an
+email on file). Pure drafting from context already on the contact — no
+photos, no search grounding — so unlike `process-contact` it's a single
+`generateStructured()` call with no tools-vs-schema conflict to work
+around. Shares `_shared/gemini.ts` with Phase 3.
+
+**New migration** `20260928000000_followups.sql`: adds
+`linkedin_note`/`linkedin_message`/`email_draft`/`followup_tone`/
+`followup_status`/`followup_generated_at` to `contacts`. Drafts are cached
+like Phase 3's research (not regenerated on every screen view).
+
+**New screen** `event/[id]/end-of-day.tsx` (linked from a header button on
+the event timeline): a "Draft All Follow-ups" button that processes
+contacts missing a draft **one at a time** (not `Promise.all`) per the $0
+budget's rate-limit rule; per-contact cards with tone chips, Copy buttons,
+Regenerate, Open LinkedIn (profile URL if known, else a LinkedIn people-
+search link), and Not sent/Sent/Replied status; an event-wide "Jobs to
+apply for" list sorted by best-effort-parsed deadline (unparseable
+deadlines sort last rather than being dropped, since `deadline` is free
+text — see Phase 3's migration notes); an event-wide action items
+checklist. Both lists aggregate `action_items`/`job_opportunities` across
+every contact in the event via new `getActionItemsForContacts`/
+`getJobsForContacts` (`.in('contact_id', [...])`), since those tables key
+on contact, not event.
+
+**Verified**: `npx tsc --noEmit` and `npx expo lint` clean (same one
+pre-existing unrelated error), `npx expo export --platform web` bundles.
+Migration pushed, function deployed and `ACTIVE`. **Not yet tested
+on-device**, same constraint as Phase 3 above — needs a real signed-in
+session to exercise the Gemini call.
+
 ## Status as of 2026-09-27
 
 ### Phase 3 — AI pipeline (Gemini), built and deployed
