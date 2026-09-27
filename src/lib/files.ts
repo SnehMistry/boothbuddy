@@ -15,22 +15,36 @@ export function extensionFromUri(uri: string, fallback: string) {
 // seconds. Copying to the app's document directory first means the upload
 // below is reading a file the OS won't yank out from under it while the
 // network request is in flight.
-async function savePersistentCopy(sourceUri: string, extension: string): Promise<string> {
+async function savePersistentCopy(sourceUri: string, extension: string): Promise<File> {
   const dir = new Directory(Paths.document, PHOTOS_BUCKET);
   dir.create({ intermediates: true, idempotent: true });
 
   const destination = new File(dir, `${Crypto.randomUUID()}.${extension}`);
   const source = new File(sourceUri);
   await source.copy(destination);
-  return destination.uri;
+  return destination;
 }
+
+// A file that uploaded with a suspiciously small body is a red flag, not a
+// real photo — this is exactly how a past bug (see MIN_UPLOAD_BYTES) showed
+// up: uploads "succeeded" but produced 14-byte objects in Storage.
+const MIN_UPLOAD_BYTES = 1024;
 
 // Takes a just-captured photo all the way from a volatile OS cache uri to a
 // permanent Supabase Storage object, returning the storage path to persist
 // in the database. Never store the local uri itself — it only exists on the
 // device that captured it, which defeats the point of syncing.
 export async function uploadCapturedFile(sourceUri: string, extension: string): Promise<string> {
-  const localUri = await savePersistentCopy(sourceUri, extension);
+  const file = await savePersistentCopy(sourceUri, extension);
+
+  // Read the file's raw bytes directly rather than fetch(uri).arrayBuffer():
+  // on Android, React Native's fetch/Blob polyfill silently produced an
+  // empty body for file:// uris, which uploaded "successfully" as a 14-byte
+  // object that rendered as a blank/black image.
+  const bytes = await file.bytes();
+  if (bytes.byteLength < MIN_UPLOAD_BYTES) {
+    throw new Error(`Captured file is only ${bytes.byteLength} bytes — likely corrupted.`);
+  }
 
   const {
     data: { user },
@@ -41,9 +55,8 @@ export async function uploadCapturedFile(sourceUri: string, extension: string): 
   // folder named after their own user id (see the storage policies in
   // supabase/migrations).
   const storagePath = `${user.id}/${Crypto.randomUUID()}.${extension}`;
-  const arrayBuffer = await fetch(localUri).then((res) => res.arrayBuffer());
 
-  const { error } = await supabase.storage.from(PHOTOS_BUCKET).upload(storagePath, arrayBuffer, {
+  const { error } = await supabase.storage.from(PHOTOS_BUCKET).upload(storagePath, bytes, {
     contentType: `image/${extension === 'jpg' ? 'jpeg' : extension}`,
   });
   if (error) throw error;

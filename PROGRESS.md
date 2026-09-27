@@ -39,9 +39,52 @@ for good, per `PROMPT.md`'s "Audio removed" section:
   pre-existing, unrelated error in `use-color-scheme.web.ts` predates this
   change — confirmed via `git stash`), and `npx expo export --platform web`
   bundles successfully.
-- **Not yet tested on-device** — next step is to run the app on the Samsung
-  device, create a contact with notes + photos + company URL + name, and
-  confirm Save/sync still works with audio gone.
+- Confirmed on-device: Save works and audio is gone.
+
+### Photo upload bug fix — blank/black photos on Android
+On-device testing surfaced a real bug: uploaded photos showed blank/black
+in the app, and the Supabase dashboard showed the Storage objects were
+only 14 bytes (should be ~100KB+ JPEGs).
+
+**Root cause**: `uploadCapturedFile` (`src/lib/files.ts`) read the local
+file with `fetch(localUri).then((res) => res.arrayBuffer())`. On Android,
+React Native's `fetch`/`Blob` polyfill silently produced an empty body for
+`file://` uris — the upload request "succeeded" (no error thrown) but sent
+almost nothing.
+
+**Fix**: read the file's bytes directly with the new `expo-file-system`
+`File` API's `file.bytes()` (`Promise<Uint8Array>`) instead of going
+through `fetch`, and pass that `Uint8Array` straight to
+`supabase.storage.upload()` (it accepts `ArrayBufferView`, so no base64
+round-trip or extra dependency like `base64-arraybuffer` was needed —
+`.bytes()` already returns raw bytes). Also added a
+`MIN_UPLOAD_BYTES = 1024` guard: `uploadCapturedFile` now throws if the
+read file is smaller than that, which surfaces through the existing
+"couldn't upload photo" / "some photos failed to upload" alerts in
+`photo-picker.tsx` instead of silently saving a corrupt file.
+
+**Existing broken photos**: 6 fifteen-ish-byte photos from earlier testing
+are still sitting in Storage (and their `contact_photos` rows), all under
+one contact. Rather than writing one-off cleanup code for a handful of
+test rows, the fix is to **use the app itself**: open that contact, delete
+each blank/black photo with the existing long-press → Delete (or the
+full-screen viewer's Delete button) — this already removes both the DB row
+and the Storage object — then re-add the photos if still wanted; they'll
+upload correctly now.
+
+**Not investigated further**: tried to script-delete the orphaned Storage
+objects via `supabase storage rm` (both the old and a freshly-upgraded CLI,
+2.117.0 → 2.118.0) — it accepted the command but performed no deletion
+(`{"deleted":[]}`) even after adding the newly-required `--yes` flag, and
+after the CLI upgrade `supabase login` needs to be re-run (auth token
+wasn't carried over) before any more `supabase` CLI commands will work in
+this environment. Not worth fighting further for a handful of test rows —
+deleting through the app is faster and exercises the real delete path
+anyway.
+
+- **Not yet tested on-device**: add a new photo (camera and library) and
+  confirm both the thumbnail and full-screen preview now show a real
+  image, not blank/black.
 
 ## Status as of 2026-09-23
 
