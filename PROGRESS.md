@@ -114,6 +114,65 @@ no clear time budget. Static checks (typecheck, lint, bundling) all pass,
 but the sidebar/table/panel layout has not been visually confirmed to
 render correctly — this needs a real look in a browser.
 
+### Free deployment — GitHub Pages
+Scanned the entire git history for secrets before making the repo public
+(required for free Pages hosting on a personal account): grepped every
+commit's diff content for JWT-shaped strings, `sb_secret_`/service-role
+patterns, Google API key patterns, and generic `password=`/`secret=`
+assignments — nothing found. `.env` was never committed (confirmed via
+`git log --all --full-history -- .env`); only `.env.example` exists, and
+every value in it, in every revision, is a placeholder. Repo made public
+via `gh repo edit --visibility public`.
+
+- `app.json`: added `experiments.baseUrl: "/boothbuddy"` so the exported
+  build's asset/script paths resolve under the GitHub Pages subpath.
+  Confirmed empirically (inspected the exported `index.html`, and checked
+  the dev server's bundle request path) that this only affects
+  `expo export`, not `expo start --web`, which still serves from `/`.
+- `package.json`: added `gh-pages` as a dev dependency with
+  `predeploy`/`deploy` scripts. `predeploy` also copies `index.html` to
+  `404.html` — this app's web output is `"single"` (one client-routed
+  bundle, not per-route static HTML), so a static host needs that file to
+  serve the app shell for a direct hit on a nested route like
+  `/event/[id]` instead of a real 404.
+- Deployed via `npm run deploy`; GitHub auto-detected the `gh-pages`
+  branch and enabled Pages (confirmed via `gh api repos/.../pages`).
+- **Verified past what static checks alone could show**: curled the live
+  URL (root loads, HTTP 200), curled a fake nested route
+  (`/event/some-fake-id`) and confirmed it returns byte-identical content
+  to the root via the `404.html` fallback (so client-side routing gets a
+  chance to run), and confirmed the referenced JS bundle is reachable at
+  its base-URL-prefixed path. **Could not go further than that** — same
+  missing-browser-automation constraint as the web dashboard above, so
+  the app's actual JS execution (does the sign-in screen render, does
+  routing actually work once loaded) is unverified.
+- Live: **https://snehmistry.github.io/boothbuddy/**
+
+### Polish
+- **Branding**: replaced the generic Expo starter icon with a custom
+  conference-name-badge glyph (one SVG source,
+  `scripts/gen-icons.mjs`, rendered via a temporary `sharp` install —
+  `npm install --no-save sharp`, not a project dependency — into every
+  platform variant). Fixed the display name to "BoothBuddy" (was
+  lowercase). Removed the default template's Icon Composer (`.icon`)
+  bundle for iOS — hand-authoring that format without the real Icon
+  Composer tool was too risky — in favor of the plain PNG icon, and
+  deleted every unused template placeholder image (react-logo*,
+  expo-badge*, tabIcons/, etc.).
+- **Loading states**: several screens (`contact/[id]`, `end-of-day`, the
+  web dashboard, the web root layout's auth check) rendered `null` while
+  their data loaded, which flashes blank inside otherwise-visible screen
+  chrome. All now show a shared `LoadingView` spinner instead. Native's
+  root layout didn't need this — it's already covered by the branded
+  splash overlay.
+- **Lint**: removed `use-color-scheme.web.ts`, the starter template's
+  SSR-hydration guard for `useColorScheme`. This project's web output is
+  `"single"` (a plain client-rendered SPA, never static/server-rendered),
+  so the hydration mismatch that hook guards against can't happen here —
+  it was also the one lint error that had persisted since before this
+  session (confirmed via `git stash` early on). `npx expo lint` is now
+  fully clean.
+
 ## Status as of 2026-09-27
 
 ### Phase 3 — AI pipeline (Gemini), built and deployed
