@@ -17,7 +17,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { createContact } from '@/lib/storage';
+import { createContact, processContact } from '@/lib/storage';
 import type { ContactPhoto, PhotoLabel } from '@/lib/types';
 
 export default function NewContactScreen() {
@@ -63,13 +63,19 @@ export default function NewContactScreen() {
     try {
       // Photos are already uploaded to Supabase Storage as they were
       // captured, so this is just writing the contact record itself.
-      await createContact({
+      const contact = await createContact({
         eventId,
         name: name.trim(),
         photos,
         companyUrl: companyUrl.trim() || undefined,
         notes: notes.trim() || undefined,
       });
+      // Deliberately not awaited: AI processing can take a while (several
+      // Gemini calls with retry-with-backoff on the free tier), and
+      // blocking Save on it would defeat the "capture in ~60 seconds" goal.
+      // It keeps running after we navigate away; the contact card shows
+      // whatever ai_status it lands on next time it's opened.
+      processContact(contact.id).catch(() => {});
       router.replace(`/event/${eventId}`);
     } catch {
       Alert.alert(

@@ -1,7 +1,17 @@
 import * as Crypto from 'expo-crypto';
 
 import { supabase } from '@/lib/supabase';
-import type { BoothEvent, Contact, ContactPhoto, PhotoLabel } from '@/lib/types';
+import type {
+  ActionItem,
+  AiStatus,
+  BoothEvent,
+  Contact,
+  ContactPhoto,
+  ContactResearch,
+  InterestLevel,
+  JobOpportunity,
+  PhotoLabel,
+} from '@/lib/types';
 
 type EventRow = {
   id: string;
@@ -17,6 +27,38 @@ type ContactRow = {
   name: string;
   company_url: string | null;
   notes: string | null;
+  created_at: string;
+  title: string | null;
+  company: string | null;
+  email: string | null;
+  linkedin_url: string | null;
+  summary: string | null;
+  topics: string[] | null;
+  roles_mentioned: string[] | null;
+  deadlines: string[] | null;
+  memorable: string | null;
+  interest_level: InterestLevel | null;
+  ai_status: AiStatus;
+  ai_error: string | null;
+  ai_processed_at: string | null;
+  research: ContactResearch | null;
+};
+
+type ActionItemRow = {
+  id: string;
+  contact_id: string;
+  text: string;
+  done: boolean;
+  created_at: string;
+};
+
+type JobOpportunityRow = {
+  id: string;
+  contact_id: string;
+  title: string;
+  url: string | null;
+  deadline: string | null;
+  applied: boolean;
   created_at: string;
 };
 
@@ -56,6 +98,42 @@ function contactFromRow(row: ContactRow, photos: ContactPhoto[]): Contact {
     companyUrl: row.company_url ?? undefined,
     notes: row.notes ?? undefined,
     photos,
+    aiStatus: row.ai_status,
+    aiError: row.ai_error ?? undefined,
+    aiProcessedAt: row.ai_processed_at ?? undefined,
+    title: row.title ?? undefined,
+    company: row.company ?? undefined,
+    email: row.email ?? undefined,
+    linkedinUrl: row.linkedin_url ?? undefined,
+    summary: row.summary ?? undefined,
+    topics: row.topics ?? undefined,
+    rolesMentioned: row.roles_mentioned ?? undefined,
+    deadlines: row.deadlines ?? undefined,
+    memorable: row.memorable ?? undefined,
+    interestLevel: row.interest_level ?? undefined,
+    research: row.research ?? undefined,
+  };
+}
+
+function actionItemFromRow(row: ActionItemRow): ActionItem {
+  return {
+    id: row.id,
+    contactId: row.contact_id,
+    text: row.text,
+    done: row.done,
+    createdAt: row.created_at,
+  };
+}
+
+function jobFromRow(row: JobOpportunityRow): JobOpportunity {
+  return {
+    id: row.id,
+    contactId: row.contact_id,
+    title: row.title,
+    url: row.url ?? undefined,
+    deadline: row.deadline ?? undefined,
+    applied: row.applied,
+    createdAt: row.created_at,
   };
 }
 
@@ -128,7 +206,11 @@ export async function getContact(id: string): Promise<Contact | undefined> {
   return contactFromRow(row as ContactRow, photosByContact.get(id) ?? []);
 }
 
-export async function createContact(input: Omit<Contact, 'id' | 'createdAt'>): Promise<Contact> {
+// A fresh capture only has these fields — everything else on Contact is
+// filled in later by AI processing (Phase 3) and defaults server-side.
+export type NewContactInput = Pick<Contact, 'eventId' | 'name' | 'photos' | 'companyUrl' | 'notes'>;
+
+export async function createContact(input: NewContactInput): Promise<Contact> {
   // Generate ids client-side (rather than letting Postgres default them) so
   // a photo's id matches the id PhotoPicker already used for its instant
   // local preview, taken before this contact ever reaches the database.
@@ -174,6 +256,7 @@ export async function updateContact(
   if (patch.name !== undefined) updates.name = patch.name;
   if (patch.companyUrl !== undefined) updates.company_url = patch.companyUrl ?? null;
   if (patch.notes !== undefined) updates.notes = patch.notes ?? null;
+  if (patch.interestLevel !== undefined) updates.interest_level = patch.interestLevel ?? null;
 
   const { error } = await supabase.from('contacts').update(updates).eq('id', id);
   if (error) throw error;
@@ -218,4 +301,83 @@ export async function setContactPhotoLabel(
     .eq('id', photoId);
   if (error) throw error;
   return getContact(contactId);
+}
+
+// The user confirming/rejecting the AI's person match — the only part of
+// `research` the user edits directly, so it gets its own function rather
+// than going through updateContact's flat patch model.
+export async function setResearchMatchStatus(
+  contact: Contact,
+  matchStatus: ContactResearch['matchStatus'],
+): Promise<Contact | undefined> {
+  if (!contact.research) return contact;
+  const { error } = await supabase
+    .from('contacts')
+    .update({ research: { ...contact.research, matchStatus } })
+    .eq('id', contact.id);
+  if (error) throw error;
+  return getContact(contact.id);
+}
+
+export async function getActionItemsForContact(contactId: string): Promise<ActionItem[]> {
+  const { data, error } = await supabase
+    .from('action_items')
+    .select('*')
+    .eq('contact_id', contactId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data as ActionItemRow[]).map(actionItemFromRow);
+}
+
+export async function setActionItemDone(id: string, done: boolean): Promise<void> {
+  const { error } = await supabase.from('action_items').update({ done }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function getJobsForContact(contactId: string): Promise<JobOpportunity[]> {
+  const { data, error } = await supabase
+    .from('job_opportunities')
+    .select('*')
+    .eq('contact_id', contactId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data as JobOpportunityRow[]).map(jobFromRow);
+}
+
+export async function setJobApplied(id: string, applied: boolean): Promise<void> {
+  const { error } = await supabase.from('job_opportunities').update({ applied }).eq('id', id);
+  if (error) throw error;
+}
+
+// Kicks off the Phase 3 Edge Function: structures the contact card, reads
+// photos, and researches the person/company. Can take a while (multiple
+// Gemini calls with retry-with-backoff on the free tier's rate limit), so
+// callers should not block navigation on this — see new-contact.tsx, which
+// fires it after Save without awaiting.
+//
+// The returned contact's `photos` is always empty — processing never
+// touches photos, so callers should merge these fields onto a contact they
+// already loaded rather than treating this as the full record.
+export async function processContact(contactId: string): Promise<{
+  contact: Contact;
+  actionItems: ActionItem[];
+  jobs: JobOpportunity[];
+}> {
+  const { data, error } = await supabase.functions.invoke('process-contact', {
+    body: { contactId },
+  });
+  if (error) {
+    // FunctionsHttpError's body is the JSON { error: message } this
+    // function's edge function returns on failure — surface that instead
+    // of the generic "Edge Function returned a non-2xx status code".
+    const context = (error as { context?: Response }).context;
+    const detail = await context?.json?.().catch(() => null);
+    throw new Error(detail?.error ?? error.message);
+  }
+
+  return {
+    contact: contactFromRow(data.contact as ContactRow, []),
+    actionItems: (data.actionItems as ActionItemRow[]).map(actionItemFromRow),
+    jobs: (data.jobs as JobOpportunityRow[]).map(jobFromRow),
+  };
 }

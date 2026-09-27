@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -12,6 +12,13 @@ import type { BoothEvent, Contact } from '@/lib/types';
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
+
+const AI_STATUS_BADGES: Record<Contact['aiStatus'], string> = {
+  idle: '',
+  processing: ' · ✨ Processing…',
+  done: ' · ✨ Done',
+  error: ' · ⚠️ AI failed',
+};
 
 export default function EventTimelineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,6 +35,18 @@ export default function EventTimelineScreen() {
       getContactsForEvent(id).then(setContacts);
     }, [id, navigation]),
   );
+
+  // AI processing kicks off in the background right after a contact is
+  // saved (see new-contact.tsx) and can take a while — poll while anything
+  // is still processing so the badge below updates without the user having
+  // to leave and re-open this screen.
+  useEffect(() => {
+    if (!contacts.some((c) => c.aiStatus === 'processing')) return;
+    const interval = setInterval(() => {
+      getContactsForEvent(id).then(setContacts);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [contacts, id]);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -65,6 +84,7 @@ export default function EventTimelineScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   {formatTime(item.createdAt)}
                   {item.photos.length > 0 ? ` · 📷×${item.photos.length}` : ''}
+                  {AI_STATUS_BADGES[item.aiStatus]}
                 </ThemedText>
               </ThemedView>
             </Pressable>

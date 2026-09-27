@@ -28,6 +28,50 @@ export type ContactPhoto = {
   createdAt: string;
 };
 
+export const INTEREST_LEVELS = ['hot', 'warm', 'cold'] as const;
+export type InterestLevel = (typeof INTEREST_LEVELS)[number];
+
+export const AI_STATUSES = ['idle', 'processing', 'done', 'error'] as const;
+export type AiStatus = (typeof AI_STATUSES)[number];
+
+export type ResearchSource = {
+  title: string;
+  url: string;
+};
+
+export const MATCH_STATUSES = ['unconfirmed', 'confirmed', 'rejected'] as const;
+export type MatchStatus = (typeof MATCH_STATUSES)[number];
+
+// Person & company research produced by the process-contact Edge Function.
+// `grounded` is false when Gemini's Google Search grounding wasn't
+// available/successful and the summaries come from the model's own
+// knowledge instead — the UI must label that clearly, per PROMPT.md.
+export type ContactResearch = {
+  person: { summary: string; confidence: 'high' | 'low' };
+  company: { summary: string };
+  sources: ResearchSource[];
+  grounded: boolean;
+  matchStatus: MatchStatus;
+};
+
+export type ActionItem = {
+  id: string;
+  contactId: string;
+  text: string;
+  done: boolean;
+  createdAt: string;
+};
+
+export type JobOpportunity = {
+  id: string;
+  contactId: string;
+  title: string;
+  url?: string;
+  deadline?: string; // free text — see the migration for why it's not a date column
+  applied: boolean;
+  createdAt: string;
+};
+
 export type Contact = {
   id: string;
   eventId: string;
@@ -36,4 +80,20 @@ export type Contact = {
   photos: ContactPhoto[];
   companyUrl?: string; // filled by typing, or by scanning a QR code
   notes?: string; // typed notes about the conversation — the main text input
+
+  // AI-structured card fields (Phase 3) — all unset until processed once.
+  aiStatus: AiStatus;
+  aiError?: string;
+  aiProcessedAt?: string;
+  title?: string;
+  company?: string;
+  email?: string;
+  linkedinUrl?: string;
+  summary?: string;
+  topics?: string[];
+  rolesMentioned?: string[];
+  deadlines?: string[];
+  memorable?: string;
+  interestLevel?: InterestLevel;
+  research?: ContactResearch;
 };

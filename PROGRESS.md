@@ -3,6 +3,85 @@
 Working log for picking this project back up. See `README.md` for the
 overall roadmap and `PROMPT.md` for detailed feature specs.
 
+## Status as of 2026-09-27
+
+### Phase 3 — AI pipeline (Gemini), built and deployed
+Implements PROMPT.md's "Phase 3 — AI pipeline, full spec". User confirmed
+photo uploads work on-device (camera + library, thumbnail + full-screen)
+before this phase started.
+
+**New Edge Function** `supabase/functions/process-contact/`:
+- `_shared/gemini.ts`: plain-`fetch()` wrapper around the classic Gemini
+  `generateContent` REST endpoint (not the `@google/genai` SDK — no bundling
+  needed in Deno) using model alias `gemini-flash-latest`. Retries on HTTP
+  429 with exponential backoff + jitter, per the $0 budget rule.
+- `index.ts`: for one contact, (1) downloads its photos from Storage,
+  base64-inlines them, and calls Gemini with `responseSchema` for strict
+  JSON structuring (title, company, email, LinkedIn, summary, topics,
+  roles/opportunities, deadlines, action items, memorable, interest level);
+  (2) makes a **separate** research call with the `googleSearch` tool for
+  grounding.
+- **Important API constraint discovered while building this**: Gemini does
+  not support combining `responseSchema` (structured JSON output) with
+  `tools` (like `googleSearch`) in the same request on this model — that
+  combo is a preview feature limited to newer model families. This is why
+  structuring and research are two separate calls, not one.
+- **Grounding fallback**: `generateGrounded()` tries the `googleSearch` tool
+  first; if that call fails for *any* reason (quota, permission, tier
+  eligibility — free-tier grounding availability shifts and isn't worth
+  hardcoding assumptions about), it retries the same prompt without tools
+  and marks the result `grounded: false`. The contact card UI labels
+  ungrounded research as "not live-searched" per spec.
+- The research call can't use `responseSchema` (see above), so it's asked
+  in the prompt to reply with JSON and parsed leniently (strips markdown
+  fences, falls back to using the raw text as the summary if parsing
+  fails) — a malformed reply degrades gracefully instead of failing the
+  whole pipeline.
+- Runs as the calling user (forwards their `Authorization` header) rather
+  than the service role, so RLS scopes every read/write automatically —
+  no separate ownership check needed in the function.
+
+**New migration** `20260927000000_ai_pipeline.sql`: adds structured card
+columns + `ai_status`/`ai_error`/`ai_processed_at`/`research` (jsonb) to
+`contacts`, and two new normalized tables, `action_items` and
+`job_opportunities` (not jsonb blobs) — Phase 4's End-of-Day recap needs a
+per-item checkbox aggregated across every contact at an event, which a
+blob can't give cheaply. `job_opportunities.deadline` is `text`, not
+`date`: AI-found deadlines are often imprecise ("Oct 15", no year), and a
+real `date` column would silently drop anything unparseable.
+
+**Client changes**: `processContact()` in `storage.ts` invokes the Edge
+Function; `new-contact.tsx` fires it right after Save without awaiting (it
+can take up to ~a minute with retries, and blocking Save would defeat the
+capture-in-60-seconds goal) — the contact card just shows whatever
+`ai_status` it lands on next time it's opened. The contact detail screen
+(`contact/[id].tsx`) got a large addition: AI status bar with
+Process/Reprocess/Retry, the structured card (with editable Hot/Warm/Cold
+chips), action items and jobs checklists, and a research section with
+Confirm/Reject match buttons. Both this screen and the event timeline poll
+every 4s while a contact's `ai_status` is `processing`, so the UI updates
+on its own.
+
+**Deployed**: migration pushed and function deployed
+(`supabase functions deploy process-contact`, `verify_jwt: true`) to the
+live project. `npx tsc --noEmit` and `npx expo lint` both clean (same
+one pre-existing unrelated error as before), and `npx expo export
+--platform web` bundles successfully.
+
+**Not yet tested end-to-end**: no on-device test yet — this whole
+pipeline was built and deployed from docs/reasoning, not verified against
+a real Gemini response. Likely first failure points if something's wrong:
+the exact `gemini-flash-latest` model id, the `responseSchema` shape, or
+the research call's lenient JSON parsing. The Supabase CLI in this
+environment doesn't expose a `functions logs` subcommand — errors surface
+through the app's own "Couldn't process with AI" alert (which threads the
+Edge Function's real error message through), so that's the debugging
+channel if the first test fails.
+
+**Also fixed in passing**: `supabase` CLI was upgraded 2.117.0 → 2.118.0
+while investigating an earlier storage cleanup issue, which invalidated
+the CLI's login; user re-ran `supabase login` to restore it.
+
 ## Status as of 2026-09-26
 
 ### Phase 2 confirmed working

@@ -4,8 +4,9 @@ A career fair / networking follow-up assistant. Capture typed notes and a
 photo after each conversation, and let AI turn it into a structured contact
 card and draft LinkedIn follow-up messages that night.
 
-> 🚧 Status: early development (Phase 3 — AI pipeline). See
-> [Roadmap](#roadmap) below for what's built vs. planned.
+> 🚧 Status: early development (Phase 3 — AI pipeline built and deployed,
+> pending on-device confirmation). See [Roadmap](#roadmap) below for what's
+> built vs. planned.
 
 ## The problem
 
