@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "boothbuddy",
+    "name": "BoothBuddy",
     "slug": "boothbuddy",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,7 +8,7 @@
     "scheme": "boothbuddy",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
       "adaptiveIcon": {
