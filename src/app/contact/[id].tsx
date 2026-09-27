@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
+import { LoadingView } from '@/components/loading-view';
 import { PhotoPicker } from '@/components/photo-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -167,7 +168,7 @@ export default function ContactDetailScreen() {
     if (updated) setContact(updated);
   };
 
-  if (!contact) return null;
+  if (!contact) return <LoadingView />;
 
   const hasCard = contact.aiStatus === 'done';
 

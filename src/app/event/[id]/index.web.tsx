@@ -4,6 +4,7 @@ import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'exp
 import * as Clipboard from 'expo-clipboard';
 
 import { FollowupCard } from '@/components/followup-card';
+import { LoadingView } from '@/components/loading-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -286,7 +287,7 @@ export default function EventDashboardScreen() {
     await updateContact(contact.id, { followupStatus }).catch(() => {});
   };
 
-  if (!event) return null;
+  if (!event) return <LoadingView />;
 
   return (
     <ThemedView style={styles.root}>

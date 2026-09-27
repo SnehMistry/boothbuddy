@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
 import { FollowupCard } from '@/components/followup-card';
+import { LoadingView } from '@/components/loading-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -124,7 +125,7 @@ export default function EndOfDayScreen() {
   const sortedJobs = [...jobs].sort((a, b) => deadlineSortKey(a.deadline) - deadlineSortKey(b.deadline));
   const draftsMissing = contacts.filter((c) => !c.linkedinNote).length;
 
-  if (!event) return null;
+  if (!event) return <LoadingView />;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>

@@ -1,6 +1,7 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { View, useColorScheme } from 'react-native';
 
+import { LoadingView } from '@/components/loading-view';
 import { SignInScreen } from '@/components/sign-in-screen';
 import { WebSidebar } from '@/components/web-sidebar';
 import { useSession } from '@/hooks/use-session';
@@ -15,7 +16,7 @@ export default function WebRootLayout() {
   const colorScheme = useColorScheme();
   const { session, loading } = useSession();
 
-  if (loading) return null;
+  if (loading) return <LoadingView />;
   if (!session) return <SignInScreen />;
 
   return (
