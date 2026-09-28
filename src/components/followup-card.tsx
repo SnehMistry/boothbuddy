@@ -8,6 +8,7 @@ import { Chip } from '@/components/chip';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { haptics } from '@/lib/haptics';
 import { FOLLOWUP_TONES, type Contact, type FollowupStatus, type FollowupTone } from '@/lib/types';
 
 const STATUS_LABELS: Record<FollowupStatus, string> = {
@@ -218,7 +219,10 @@ export function FollowupCard({
             key={status}
             label={STATUS_LABELS[status]}
             selected={contact.followupStatus === status}
-            onPress={() => onStatusChange(contact, status)}
+            onPress={() => {
+              if (status === 'sent') haptics.success();
+              onStatusChange(contact, status);
+            }}
           />
         ))}
       </View>

@@ -1,5 +1,7 @@
 import { Alert, Platform } from 'react-native';
 
+import { haptics } from '@/lib/haptics';
+
 // react-native-web's Alert.alert renders nothing for a multi-button alert
 // (no window.confirm/window.alert call happens at all for the 2+ button
 // case) — every "Delete this?"/"Sign out?" confirmation in the app was
@@ -17,7 +19,14 @@ export function confirmAction(
   return new Promise((resolve) => {
     Alert.alert(title, message, [
       { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-      { text: confirmLabel, style: 'destructive', onPress: () => resolve(true) },
+      {
+        text: confirmLabel,
+        style: 'destructive',
+        onPress: () => {
+          haptics.warning();
+          resolve(true);
+        },
+      },
     ]);
   });
 }

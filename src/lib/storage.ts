@@ -1,5 +1,6 @@
 import * as Crypto from 'expo-crypto';
 
+import { isDueWithinDays } from '@/lib/deadlines';
 import { supabase } from '@/lib/supabase';
 import type {
   ActionItem,
@@ -213,12 +214,9 @@ export async function getOverallStats(): Promise<OverallStats> {
   ).length;
 
   const now = Date.now();
-  const weekFromNow = now + 7 * 24 * 60 * 60 * 1000;
-  const applicationsDueThisWeek = jobs.filter((job) => {
-    if (job.applied || !job.deadline) return false;
-    const parsed = Date.parse(job.deadline);
-    return !Number.isNaN(parsed) && parsed >= now && parsed <= weekFromNow;
-  }).length;
+  const applicationsDueThisWeek = jobs.filter(
+    (job) => !job.applied && isDueWithinDays(job.deadline, 7, now),
+  ).length;
 
   return { peopleMet, followupsSent, applicationsDueThisWeek };
 }

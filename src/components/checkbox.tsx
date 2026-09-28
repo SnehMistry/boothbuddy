@@ -4,6 +4,7 @@ import { Pressable, StyleSheet } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { haptics } from '@/lib/haptics';
 
 // A real checkbox row (icon + label), replacing the ☐/☑ unicode
 // characters used for action items and jobs — those render as whatever
@@ -23,7 +24,12 @@ export function Checkbox({
   const theme = useTheme();
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+    <Pressable
+      onPress={() => {
+        haptics.selection();
+        onPress();
+      }}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
       <Ionicons
         name={checked ? 'checkbox' : 'square-outline'}
         size={20}

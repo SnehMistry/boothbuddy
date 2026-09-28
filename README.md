@@ -9,11 +9,14 @@ in a desktop dashboard at night.
 **Live demo:** https://snehmistry.github.io/boothbuddy/ (requires a
 Supabase account to sign in — see [Setup](#setup) to run your own)
 
-> Status: all seven build phases are implemented and deployed. The capture
-> flow (events, contacts, photos) is confirmed working on-device; the AI
-> pipeline (Gemini structuring/research/drafting) is built, deployed, and
-> passes static verification (typecheck, lint, bundling) but hasn't yet had
-> a live on-device confirmation run. See [Roadmap](#roadmap).
+**Android:** sideloadable APK via [EAS Build](https://docs.expo.dev/build/introduction/)
+(free tier) — run `eas build --platform android --profile preview` after
+[Setup](#setup) to produce your own installable build.
+
+> Status: all seven build phases are implemented, deployed, and confirmed
+> working end-to-end on-device — capture, the Gemini AI pipeline
+> (structuring, vision, research, job finding, drafting), the End-of-Day
+> recap, and the web dashboard. See [Roadmap](#roadmap).
 
 ## The problem
 
@@ -40,14 +43,39 @@ further._
 - [x] Business card / badge / booth photo reading (vision) to fill in missing fields
 - [x] Person & company research with source links, a confidence level, and a match confirm/reject step
 - [x] Open jobs/internships found per company, with links and deadlines
-- [x] "Reprocess with AI" after editing notes or adding photos
-- [x] End-of-Day recap per event: AI-drafted LinkedIn connection note + longer follow-up message, with tone options, Copy, Regenerate, and "Open LinkedIn"
+- [x] "Reprocess with AI" after editing notes or adding photos, with friendly busy/error messages and automatic retry/fallback if Gemini is overloaded
+- [x] End-of-Day recap per event: AI-drafted LinkedIn connection note + longer follow-up message, with tone options, character counters, Copy, Regenerate, "Open LinkedIn" (new tab on web), and "Open in Gmail" (pre-filled compose)
 - [x] Optional follow-up email draft when an email address is known
 - [x] Track follow-up status: Not sent / Sent / Replied
 - [x] Jobs-to-apply checklist per event, sorted by deadline, with Applied checkboxes
 - [x] Action items checklist per event
-- [x] Web dashboard: sidebar + contacts table + side-by-side contact/draft review, for doing follow-ups at night
-- [x] Free deployment: web on GitHub Pages, backend on Supabase's free tier, AI on Gemini's free tier — $0 to run
+- [x] Delete a contact or an entire event (with confirmation), cascading to their photos, action items, and job records
+- [x] Change password, from either phone or web
+- [x] Web dashboard: sidebar + at-a-glance stats + contacts table + side-by-side contact/draft review, for doing follow-ups at night
+- [x] A real design system — light/dark mode, one typography scale, consistent cards/badges/chips/checkboxes, loading skeletons, empty states, and haptic feedback on key phone actions
+- [x] Free deployment: web on GitHub Pages, backend on Supabase's free tier, AI on Gemini's free tier, Android via EAS Build's free tier — $0 to run
+
+## How it works
+
+1. **Capture, at the booth.** Open an event, type or dictate a few notes
+   about the person, snap a photo of their badge/business card/booth, and
+   scan or type their company's URL. Save takes ~60 seconds and doesn't
+   block on AI.
+2. **Process, in the background.** Saving a contact kicks off the
+   `process-contact` Edge Function without waiting for it: Gemini reads any
+   photos (vision), structures the notes into a contact card, researches
+   the person and company (with a confirm/reject step if the match is
+   uncertain), and looks for open roles at their company.
+3. **Review, that night.** Open the event's End-of-Day recap or the web
+   dashboard to see everyone captured that day: confirm research matches,
+   adjust interest level, and check the AI-found jobs and action items.
+4. **Draft and send follow-ups.** For each contact, Gemini drafts a LinkedIn
+   connection note, a longer follow-up message, and (if an email is known)
+   an email — regenerate in a different tone, copy, or open directly in
+   LinkedIn / Gmail. Mark each one Sent as you go.
+5. **Track what's left.** The jobs-to-apply and action-item checklists
+   persist across sessions, so nothing found by AI gets lost between the
+   fair and actually applying.
 
 ## Tech stack
 
@@ -56,9 +84,12 @@ further._
 | App              | [Expo](https://expo.dev) (React Native) + [Expo Router](https://docs.expo.dev/router/introduction/) + TypeScript — one codebase for iOS, Android, and web, with `.web.tsx` overrides for the desktop dashboard |
 | Backend          | [Supabase](https://supabase.com) free tier — Postgres database, email auth, file storage (images) |
 | Server-side AI   | Supabase Edge Functions (Deno) — the app never talks to the AI API directly, so the key never lives on-device |
-| AI               | Google Gemini API free tier (`gemini-flash-latest`) — contact structuring, business card/photo reading, person & company research (with Google Search grounding when available), job finding, and follow-up drafting, all in one provider to keep the project at $0 |
+| AI               | Google Gemini API free tier (`gemini-flash-latest`, falling back to `gemini-3.5-flash-lite` under heavy load) — contact structuring, business card/photo reading, job finding, and follow-up drafting; `gemini-2.5-flash`/`gemini-2.5-flash-lite` for person & company research with real Google Search grounding (the only free-tier models with that allowance), all in one provider to keep the project at $0 |
 | Capture          | `expo-camera` (photo + QR scanning), `expo-image-picker` |
+| Icons            | `@expo/vector-icons` (Ionicons), imported per-family to keep the web bundle small |
 | Web hosting      | [GitHub Pages](https://pages.github.com) — free, static hosting for the exported web build |
+| Android          | [EAS Build](https://docs.expo.dev/build/introduction/) free tier — sideloadable APK, no Play Store submission needed |
+| Testing          | Jest (`jest-expo` preset) — unit tests for pure helper functions |
 
 ### Why this stack
 
@@ -105,7 +136,8 @@ flowchart TD
     end
 
     subgraph AI["Google Gemini (free tier)"]
-        Gemini[gemini-flash-latest —<br/>structuring, vision, research,<br/>job finding, drafting]
+        Gemini[gemini-flash-latest + fallback —<br/>structuring, vision,<br/>job finding, drafting]
+        Grounded[gemini-2.5-flash + fallback —<br/>research with Google<br/>Search grounding]
     end
 
     Mobile -->|photo| Storage
@@ -117,7 +149,8 @@ flowchart TD
     Web -->|process / reprocess| Structure
     Web -->|draft follow-up| Draft
     Mobile -->|draft follow-up| Draft
-    Structure -->|structure + research| Gemini
+    Structure -->|structure + vision + jobs| Gemini
+    Structure -->|research| Grounded
     Draft -->|draft messages| Gemini
     Structure -->|write results| DB
     Draft -->|write results| DB
@@ -128,10 +161,10 @@ flowchart TD
 ```
 src/
   app/           # Expo Router screens (file-based routing) — .web.tsx overrides give the web dashboard its own screens
-  components/    # Shared UI: PhotoPicker, FollowupCard, WebSidebar, themed primitives
-  constants/     # Theme, spacing
+  components/    # Shared UI: PhotoPicker, FollowupCard, WebSidebar, Card/Badge/Chip/Checkbox/Avatar/Toast/Skeleton, themed primitives
+  constants/     # Theme tokens (colors, typography, spacing, radius)
   hooks/         # useSession, useTheme, useContactFilter (shared search/filter logic)
-  lib/           # Supabase client, storage.ts (all DB/Storage/Edge Function calls), shared types
+  lib/           # Supabase client, storage.ts (all DB/Storage/Edge Function calls), shared types, pure helpers (+ tests)
 supabase/
   functions/     # Edge Functions: process-contact, generate-followup, _shared/gemini.ts
   migrations/    # SQL migrations, applied in order via `supabase db push`
@@ -190,6 +223,25 @@ npm run deploy   # builds the web export and pushes it to the gh-pages branch
 Then in the repo's Settings → Pages, set the source to the `gh-pages` branch
 (only needed once — this repo already has it configured).
 
+### Building the Android APK
+
+```bash
+eas login                                            # one-time, free Expo account
+eas env:set EXPO_PUBLIC_SUPABASE_URL <your-url> --environment preview --visibility plaintext
+eas env:set EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY <your-key> --environment preview --visibility plaintext
+eas build --platform android --profile preview       # sideloadable APK, free tier
+```
+
+These are the same public/publishable client values as `.env` — never the
+Supabase service role key, which stays a server-only secret. The resulting
+APK can be installed directly on an Android device without the Play Store.
+
+### Running tests
+
+```bash
+npm test   # Jest unit tests for pure helper functions (deadlines, URL display, AI error parsing)
+```
+
 ## Roadmap
 
 Built in phases, each one runnable and testable before moving to the next:
@@ -197,8 +249,8 @@ Built in phases, each one runnable and testable before moving to the next:
 - [x] **Phase 0** — Project scaffolding: Expo + TypeScript + Expo Router, git, GitHub repo
 - [x] **Phase 1** — Local-only MVP: create event, capture contact (name, notes, photo/QR), timeline view. No AI yet.
 - [x] **Phase 2** — Supabase: auth, database schema, file storage, syncing. Confirmed on-device.
-- [x] **Phase 3** — AI pipeline via Gemini Edge Functions: contact structuring, business card reading, person & company research, job finding. Built and deployed; on-device confirmation pending.
-- [x] **Phase 4** — End-of-Day recap: follow-up drafts (copy/regenerate/tone, "Open LinkedIn", sent status), jobs-to-apply and action-item checklists. Built and deployed; on-device confirmation pending.
-- [x] **Phase 5** — Web dashboard: sidebar, contacts table, side-by-side contact/draft review.
+- [x] **Phase 3** — AI pipeline via Gemini Edge Functions: contact structuring, business card reading, person & company research (real Google Search grounding), job finding. Confirmed working on-device, including retry/fallback handling when Gemini's free tier is overloaded.
+- [x] **Phase 4** — End-of-Day recap: follow-up drafts (copy/regenerate/tone, "Open LinkedIn", "Open in Gmail", sent status), jobs-to-apply and action-item checklists. Confirmed working on-device.
+- [x] **Phase 5** — Web dashboard: sidebar, stats header, contacts table, side-by-side contact/draft review.
 - [x] **Phase 6** — Search/filter by name, company, and interest level (the one extra kept in scope).
-- [x] **Phase 7** — Polish (custom icon/branding, loading states, clean lint), deployment (web to GitHub Pages, mobile via Expo Go/EAS).
+- [x] **Phase 7** — Final polish: a full light/dark design system (tokens, typography, Card/Badge/Chip/Checkbox primitives), custom app icon/branding, loading skeletons and empty states throughout, haptic feedback on key phone actions, delete contact/event with Storage cascade cleanup, a shared web/native confirm dialog (fixing a `react-native-web` bug where multi-button alerts silently no-op), change password, unit tests for pure helpers, and deployment (web to GitHub Pages, Android via EAS Build).

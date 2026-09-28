@@ -19,6 +19,7 @@ import { PhotoPicker } from '@/components/photo-picker';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { haptics } from '@/lib/haptics';
 import { createContact, processContact } from '@/lib/storage';
 import type { ContactPhoto, PhotoLabel } from '@/lib/types';
 
@@ -78,6 +79,7 @@ export default function NewContactScreen() {
       // It keeps running after we navigate away; the contact card shows
       // whatever ai_status it lands on next time it's opened.
       processContact(contact.id).catch(() => {});
+      haptics.success();
       router.replace(`/event/${eventId}`);
     } catch {
       Alert.alert(

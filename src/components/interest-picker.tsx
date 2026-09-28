@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { haptics } from '@/lib/haptics';
 import { INTEREST_LEVELS, type InterestLevel } from '@/lib/types';
 
 const LEVEL_CONFIG: Record<
@@ -35,7 +36,10 @@ export function InterestPicker({
         return (
           <Pressable
             key={level}
-            onPress={() => onChange(level)}
+            onPress={() => {
+              haptics.selection();
+              onChange(level);
+            }}
             style={({ pressed }) => [
               styles.pill,
               {

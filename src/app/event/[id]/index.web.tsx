@@ -19,6 +19,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filter';
 import { useTheme } from '@/hooks/use-theme';
 import { confirmAction } from '@/lib/confirm';
+import { isDueWithinDays } from '@/lib/deadlines';
 import { describeAiError } from '@/lib/ai-errors';
 import {
   deleteContact,
@@ -238,13 +239,8 @@ export default function EventDashboardScreen() {
     // trip the render-purity lint rule the way it would in the component
     // body.
     const now = Date.now();
-    const weekFromNow = now + 7 * 24 * 60 * 60 * 1000;
     setDueThisWeek(
-      foundJobs.filter((job) => {
-        if (job.applied || !job.deadline) return false;
-        const parsed = Date.parse(job.deadline);
-        return !Number.isNaN(parsed) && parsed >= now && parsed <= weekFromNow;
-      }).length,
+      foundJobs.filter((job) => !job.applied && isDueWithinDays(job.deadline, 7, now)).length,
     );
   }, [id, navigation]);
 

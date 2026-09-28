@@ -13,6 +13,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { Toast, useToast } from '@/components/toast';
 import { describeAiError } from '@/lib/ai-errors';
+import { deadlineSortKey } from '@/lib/deadlines';
 import {
   generateFollowup,
   getActionItemsForContacts,
@@ -31,15 +32,6 @@ import type {
   FollowupTone,
   JobOpportunity,
 } from '@/lib/types';
-
-// AI-found deadlines are free text ("Oct 15", "rolling", no year) — best
-// effort parse for sorting, anything unparseable sorts to the end rather
-// than being dropped.
-function deadlineSortKey(deadline?: string): number {
-  if (!deadline) return Infinity;
-  const parsed = Date.parse(deadline);
-  return Number.isNaN(parsed) ? Infinity : parsed;
-}
 
 export default function EndOfDayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
