@@ -13,10 +13,11 @@ Supabase account to sign in — see [Setup](#setup) to run your own)
 (free tier) — run `eas build --platform android --profile preview` after
 [Setup](#setup) to produce your own installable build.
 
-> Status: all seven build phases are implemented, deployed, and confirmed
-> working end-to-end on-device — capture, the Gemini AI pipeline
-> (structuring, vision, research, job finding, drafting), the End-of-Day
-> recap, and the web dashboard. See [Roadmap](#roadmap).
+> Status: all eight build phases are implemented and deployed — capture, the
+> Gemini AI pipeline (structuring, vision, research, job finding, drafting),
+> the End-of-Day recap, the web dashboard, and a second polish pass (bottom
+> tabs, reminders, CSV export, a WCAG AA-checked design system). See
+> [Roadmap](#roadmap).
 
 ## The problem
 
@@ -50,9 +51,13 @@ further._
 - [x] Jobs-to-apply checklist per event, sorted by deadline, with Applied checkboxes
 - [x] Action items checklist per event
 - [x] Delete a contact or an entire event (with confirmation), cascading to their photos, action items, and job records
-- [x] Change password, from either phone or web
-- [x] Web dashboard: sidebar + at-a-glance stats + contacts table + side-by-side contact/draft review, for doing follow-ups at night
-- [x] A real design system — light/dark mode, one typography scale, consistent cards/badges/chips/checkboxes, loading skeletons, empty states, and haptic feedback on key phone actions
+- [x] Change password and a System/Light/Dark appearance preference, from either phone or web
+- [x] Editable LinkedIn profile URL per contact (used by "Open LinkedIn" instead of falling back to a name search)
+- [x] Export an event's contacts to CSV — downloads on web, native share sheet on phone
+- [x] Local reminders (phone only): the day before and morning of each AI-found deadline, plus an 8pm "you met N people, do your follow-ups" nudge on event day
+- [x] Phone bottom tabs: Events, a cross-event Deadlines view (every open job, soonest due first), and Settings
+- [x] Web dashboard: collapsible sidebar (becomes an off-canvas drawer below 768px) + at-a-glance stats + contacts table + side-by-side contact/draft review, for doing follow-ups at night
+- [x] A real design system — light/dark mode with a WCAG AA-checked color system (`npm run check-contrast`), one typography scale, consistent cards/badges/chips/checkboxes, loading skeletons, empty states, hover states on web, and haptic feedback on key phone actions
 - [x] Free deployment: web on GitHub Pages, backend on Supabase's free tier, AI on Gemini's free tier, Android via EAS Build's free tier — $0 to run
 
 ## How it works
@@ -89,6 +94,7 @@ further._
 | Icons            | `@expo/vector-icons` (Ionicons), imported per-family to keep the web bundle small |
 | Web hosting      | [GitHub Pages](https://pages.github.com) — free, static hosting for the exported web build |
 | Android          | [EAS Build](https://docs.expo.dev/build/introduction/) free tier — sideloadable APK, no Play Store submission needed |
+| Notifications    | `expo-notifications` — local-only scheduled reminders, re-derived from current data each time the app opens (no push server) |
 | Testing          | Jest (`jest-expo` preset) — unit tests for pure helper functions |
 
 ### Why this stack
@@ -111,7 +117,13 @@ further._
   retry-with-backoff and one-contact-at-a-time processing in the Edge
   Functions, and Google Search grounding isn't guaranteed to be available —
   when it isn't, research falls back to the model's own knowledge and the
-  UI labels it as not live-searched rather than silently guessing.
+  UI labels it as not live-searched rather than silently guessing. (Google's
+  own docs have shifted toward a newer, explicitly-billed "Interactions API"
+  for grounding on their latest models; whether the free `generateContent` +
+  `googleSearch` tool path this app uses is still fully supported on
+  `gemini-2.5-flash` is genuinely unclear from current documentation, and
+  it isn't something worth guessing at or testing by risking the $0 budget —
+  so the honest fallback stays rather than a blind migration to a billed API.)
 - **GitHub Pages** is free static hosting with no server to maintain; the
   export is a client-side-routed single-page app, so deployment adds one
   `experiments.baseUrl` config value and a `404.html` copy of `index.html`
@@ -123,8 +135,9 @@ further._
 ```mermaid
 flowchart TD
     subgraph Client["Expo App"]
-        Mobile[Mobile: capture UI<br/>camera, QR, forms]
-        Web[Web dashboard:<br/>sidebar + table + side panel]
+        Mobile[Mobile: capture UI +<br/>Events/Deadlines/Settings tabs]
+        Web[Web dashboard:<br/>collapsible sidebar + table + side panel]
+        Local[Local reminders<br/>expo-notifications]
     end
 
     subgraph Supabase["Supabase (free tier)"]
@@ -142,6 +155,7 @@ flowchart TD
 
     Mobile -->|photo| Storage
     Mobile -->|read / write rows| DB
+    Mobile -.->|schedules from current data| Local
     Web -->|read / write rows| DB
     Mobile -->|login| Auth
     Web -->|login| Auth
@@ -161,15 +175,17 @@ flowchart TD
 ```
 src/
   app/           # Expo Router screens (file-based routing) — .web.tsx overrides give the web dashboard its own screens
+  app/(tabs)/    # Phone's bottom tab bar (Events/Deadlines/Settings); a pass-through group on web, no tab chrome
   components/    # Shared UI: PhotoPicker, FollowupCard, WebSidebar, Card/Badge/Chip/Checkbox/Avatar/Toast/Skeleton, themed primitives
   constants/     # Theme tokens (colors, typography, spacing, radius)
-  hooks/         # useSession, useTheme, useContactFilter (shared search/filter logic)
-  lib/           # Supabase client, storage.ts (all DB/Storage/Edge Function calls), shared types, pure helpers (+ tests)
+  hooks/         # useSession, useTheme, useContactFilter, useEscapeKey (shared logic)
+  lib/           # Supabase client, storage.ts (all DB/Storage/Edge Function calls), shared types, pure helpers (+ tests), notifications.ts, theme-preference.tsx
 supabase/
   functions/     # Edge Functions: process-contact, generate-followup, _shared/gemini.ts
   migrations/    # SQL migrations, applied in order via `supabase db push`
 scripts/
-  gen-icons.mjs  # Regenerates the app icon/branding assets from one SVG source
+  gen-icons.mjs         # Regenerates the app icon/branding assets from one SVG source
+  check-contrast.mjs    # WCAG AA contrast check for every theme token pair (npm run check-contrast)
 ```
 
 ## Setup
@@ -239,7 +255,8 @@ APK can be installed directly on an Android device without the Play Store.
 ### Running tests
 
 ```bash
-npm test   # Jest unit tests for pure helper functions (deadlines, URL display, AI error parsing)
+npm test              # Jest unit tests for pure helper functions (deadlines, URL display, AI error parsing, CSV)
+npm run check-contrast # WCAG AA contrast check for every light/dark theme token pair
 ```
 
 ## Roadmap
@@ -254,3 +271,4 @@ Built in phases, each one runnable and testable before moving to the next:
 - [x] **Phase 5** — Web dashboard: sidebar, stats header, contacts table, side-by-side contact/draft review.
 - [x] **Phase 6** — Search/filter by name, company, and interest level (the one extra kept in scope).
 - [x] **Phase 7** — Final polish: a full light/dark design system (tokens, typography, Card/Badge/Chip/Checkbox primitives), custom app icon/branding, loading skeletons and empty states throughout, haptic feedback on key phone actions, delete contact/event with Storage cascade cleanup, a shared web/native confirm dialog (fixing a `react-native-web` bug where multi-button alerts silently no-op), change password, unit tests for pure helpers, and deployment (web to GitHub Pages, Android via EAS Build).
+- [x] **Phase 8** — Second polish pass: fixed a broken live-site icon bug (a stray `.gitignore` on the `gh-pages` branch was silently excluding every font asset), a WCAG AA contrast pass across every theme token, a phone bottom tab bar (Events/Deadlines/Settings) with a System/Light/Dark appearance preference, local deadline/follow-up reminders, CSV export, an editable LinkedIn URL field, a responsive web layout (collapsible sidebar → off-canvas drawer below 768px, single-pane contacts table/detail below it), hover states, keyboard shortcuts (Enter/Esc), safe-area and 44×44 touch-target fixes, human-readable dates everywhere, and a cleaner contact-detail layout (one card with dividers instead of several stacked boxes, a clean domain chip for URLs with tracking params stripped on save).
