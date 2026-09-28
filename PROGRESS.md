@@ -3,6 +3,59 @@
 Working log for picking this project back up. See `README.md` for the
 overall roadmap and `PROMPT.md` for detailed feature specs.
 
+## 2026-09-27 (later) — interest-level bug, real grounding attempt, EAS
+
+User confirmed: "AI processing works now, great results" — the first
+full end-to-end confirmation of Phase 3. Two follow-ups from that
+testing, plus a new ask (EAS Build):
+
+### Interest-level tap doing nothing
+Reported: tapping Hot/Warm/Cold on the contact screen didn't move the
+selection border. Reviewed `setInterestLevel` (`contact/[id].tsx`) and
+`updateContact` (`storage.ts`) end to end — found no reproducible logic
+bug (RLS, the CHECK constraint, and the update/refetch flow all line up
+correctly for this field the same as any other). Since I can't run the
+app myself to catch a timing/environment issue directly, applied the fix
+that's correct regardless of the exact root cause: made the update
+**optimistic** (shows the new selection immediately, matching what the
+user asked for — "show immediately" — instead of waiting on a round
+trip) and added error handling that **reverts and shows an Alert** on
+failure, in both `contact/[id].tsx` and the web dashboard's
+`handleInterestChange` (which was silently swallowing errors via
+`.catch(() => {})` — if the original bug was actually a silent failure,
+it's no longer silent). The event timeline's filter
+(`use-contact-filter.ts`) was already reading `contact.interestLevel`
+correctly — nothing to fix there; it just needed the field to actually
+persist.
+
+### Grounding — made it a real attempt, not just a label
+Researched properly this time (see `_shared/gemini.ts`'s comments): the
+free 500-requests/day Google Search grounding allowance is documented
+specifically for the **2.5 series** (`gemini-2.5-flash` /
+`-flash-lite`) — not for `gemini-flash-latest`, which resolves to a 3.x
+model with no free grounding. That's almost certainly why every research
+call was silently falling back to ungrounded. `generateGrounded` now
+tries `gemini-2.5-flash` (then `gemini-2.5-flash-lite`) specifically for
+the grounded attempt, falling back to the normal models ungrounded on
+*any* failure — including the genuine possibility that this API key's
+project doesn't have 2.5-series access, since Google's own docs
+say access is "limited to users who have actively used them in the
+past" without clarifying whether that's actually enforced for new keys.
+Both Edge Functions redeployed. **This needs an on-device check**: if
+research now shows "live-searched," it worked; if it still says "not
+live-searched," this key doesn't have 2.5-series access and the label
+was already the correct, honest behavior.
+
+### EAS Build set up for a sideloadable APK
+Added `eas.json` (a `preview` profile: `distribution: internal`,
+`android.buildType: apk` — confirmed against current Expo docs, since
+the default AAB output can't be installed directly) and
+`app.json`'s `android.package` (`com.snehmistry.boothbuddy`, required
+for any EAS Android build, wasn't set before). Free tier is 15 Android
+builds/month, one at a time — plenty for this. Walking the user through
+`eas login` themselves next (needs their own free Expo account), then
+running the build.
+
 ## 2026-09-27 — first real signal from Gemini
 
 User tested on-device: the API key works and the pipeline reaches Gemini

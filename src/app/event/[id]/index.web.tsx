@@ -255,7 +255,17 @@ export default function EventDashboardScreen() {
     setContacts((prev) =>
       prev.map((c) => (c.id === contact.id ? { ...c, interestLevel: level } : c)),
     );
-    await updateContact(contact.id, { interestLevel: level }).catch(() => {});
+    try {
+      await updateContact(contact.id, { interestLevel: level });
+    } catch (error) {
+      setContacts((prev) =>
+        prev.map((c) => (c.id === contact.id ? { ...c, interestLevel: contact.interestLevel } : c)),
+      );
+      Alert.alert(
+        "Couldn't update interest level",
+        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      );
+    }
   };
 
   const handleMatchStatus = async (contact: Contact, status: 'confirmed' | 'rejected') => {

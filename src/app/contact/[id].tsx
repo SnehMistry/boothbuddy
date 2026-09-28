@@ -150,8 +150,21 @@ export default function ContactDetailScreen() {
 
   const setInterestLevel = async (level: InterestLevel) => {
     if (!contact || contact.interestLevel === level) return;
-    const updated = await updateContact(contact.id, { interestLevel: level });
-    if (updated) setContact(updated);
+    // Optimistic: show the new selection immediately rather than waiting
+    // on the round trip, and revert with an explicit error if it fails
+    // instead of leaving the tap looking like it did nothing.
+    const previous = contact;
+    setContact({ ...contact, interestLevel: level });
+    try {
+      const updated = await updateContact(contact.id, { interestLevel: level });
+      if (updated) setContact(updated);
+    } catch (error) {
+      setContact(previous);
+      Alert.alert(
+        "Couldn't update interest level",
+        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      );
+    }
   };
 
   const toggleActionItem = (item: ActionItem) => {
