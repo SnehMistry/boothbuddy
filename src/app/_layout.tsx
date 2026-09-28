@@ -1,27 +1,35 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { ConfigErrorScreen } from '@/components/config-error-screen';
 import { SignInScreen } from '@/components/sign-in-screen';
 import { useSession } from '@/hooks/use-session';
 import { supabaseConfigError } from '@/lib/supabase';
+import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  return (
+    <ThemePreferenceProvider>
+      <RootLayoutInner />
+    </ThemePreferenceProvider>
+  );
+}
+
+function RootLayoutInner() {
+  const { resolvedScheme } = useThemePreference();
   const { session, loading } = useSession();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={resolvedScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
       {supabaseConfigError ? (
         <ConfigErrorScreen message={supabaseConfigError} />
       ) : loading ? null : session ? (
         <Stack>
-          <Stack.Screen name="index" options={{ title: 'BoothBuddy' }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="new-event"
             options={{ title: 'New Event', presentation: 'modal' }}

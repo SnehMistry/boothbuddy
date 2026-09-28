@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import { View, useColorScheme } from 'react-native';
+import { View } from 'react-native';
 
 import { ConfigErrorScreen } from '@/components/config-error-screen';
 import { LoadingView } from '@/components/loading-view';
@@ -7,6 +7,7 @@ import { SignInScreen } from '@/components/sign-in-screen';
 import { WebSidebar } from '@/components/web-sidebar';
 import { useSession } from '@/hooks/use-session';
 import { supabaseConfigError } from '@/lib/supabase';
+import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
 
 // Web gets its own root layout — a persistent sidebar (event list, "+ New
 // Event", sign out) next to the same Stack native uses, so a click on a
@@ -15,7 +16,15 @@ import { supabaseConfigError } from '@/lib/supabase';
 // full-screen, capture-focused Stack (see _layout.tsx); web becomes a
 // review-focused dashboard.
 export default function WebRootLayout() {
-  const colorScheme = useColorScheme();
+  return (
+    <ThemePreferenceProvider>
+      <WebRootLayoutInner />
+    </ThemePreferenceProvider>
+  );
+}
+
+function WebRootLayoutInner() {
+  const { resolvedScheme } = useThemePreference();
   const { session, loading } = useSession();
 
   if (supabaseConfigError) return <ConfigErrorScreen message={supabaseConfigError} />;
@@ -23,12 +32,12 @@ export default function WebRootLayout() {
   if (!session) return <SignInScreen />;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={resolvedScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <View style={{ flex: 1, flexDirection: 'row', minHeight: '100%' }}>
         <WebSidebar />
         <View style={{ flex: 1 }}>
           <Stack>
-            <Stack.Screen name="index" options={{ title: 'BoothBuddy' }} />
+            <Stack.Screen name="(tabs)" options={{ title: 'BoothBuddy', headerShown: false }} />
             <Stack.Screen
               name="new-event"
               options={{ title: 'New Event', presentation: 'modal' }}

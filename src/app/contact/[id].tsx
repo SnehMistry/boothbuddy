@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { AiErrorNotice } from '@/components/ai-error-notice';
@@ -40,6 +41,7 @@ import type { ActionItem, Contact, ContactPhoto, InterestLevel, JobOpportunity, 
 export default function ContactDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [contact, setContact] = useState<Contact | null>(null);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [jobs, setJobs] = useState<JobOpportunity[]>([]);
@@ -200,7 +202,9 @@ export default function ContactDetailScreen() {
   const hasCard = contact.aiStatus === 'done';
 
   return (
-    <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.container}>
+    <ScrollView
+      style={{ backgroundColor: theme.background }}
+      contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + Spacing.six }]}>
       <Stack.Screen
         options={{
           title: contact.name

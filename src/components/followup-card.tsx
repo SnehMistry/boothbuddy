@@ -84,7 +84,7 @@ function DraftField({
           {label}
           {limit ? ` · ${text.length}/${limit}` : ''}
         </ThemedText>
-        <Pressable onPress={onCopy} style={styles.copyButton} hitSlop={6}>
+        <Pressable onPress={onCopy} style={styles.copyButton} hitSlop={12}>
           <Ionicons name="copy-outline" size={14} color={theme.accent} />
           <ThemedText type="link" themeColor="accentStrong">
             Copy

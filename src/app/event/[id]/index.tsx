@@ -22,6 +22,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filter';
 import { useTheme } from '@/hooks/use-theme';
 import { confirmAction } from '@/lib/confirm';
+import { formatHumanDate } from '@/lib/dates';
 import { deleteEvent, getContactsForEvent, getEvent } from '@/lib/storage';
 import { INTEREST_LEVELS, type BoothEvent, type Contact } from '@/lib/types';
 
@@ -83,10 +84,10 @@ export default function EventTimelineScreen() {
             title: found.name,
             headerRight: () => (
               <View style={styles.headerButtons}>
-                <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)} hitSlop={8}>
+                <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)} hitSlop={12}>
                   <Ionicons name="moon-outline" size={20} color={theme.textMuted} />
                 </Pressable>
-                <Pressable onPress={() => handleDeleteEvent(found.name)} hitSlop={8}>
+                <Pressable onPress={() => handleDeleteEvent(found.name)} hitSlop={12}>
                   <Ionicons name="trash-outline" size={20} color={theme.danger} />
                 </Pressable>
               </View>
@@ -115,7 +116,7 @@ export default function EventTimelineScreen() {
       {event && (
         <View style={styles.eventInfo}>
           <ThemedText type="caption" themeColor="textMuted">
-            {event.date}
+            {formatHumanDate(event.date)}
             {event.location ? ` · ${event.location}` : ''} · {contacts?.length ?? 0}{' '}
             {(contacts?.length ?? 0) === 1 ? 'contact' : 'contacts'}
           </ThemedText>

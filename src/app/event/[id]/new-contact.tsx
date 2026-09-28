@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 
@@ -26,6 +26,7 @@ import type { ContactPhoto, PhotoLabel } from '@/lib/types';
 export default function NewContactScreen() {
   const { id: eventId } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState('');
   const [companyUrl, setCompanyUrl] = useState('');
@@ -115,7 +116,7 @@ export default function NewContactScreen() {
     <KeyboardAvoidingView
       style={[styles.flex, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + Spacing.six }]}>
         <ThemedText type="label" themeColor="textMuted">
           Notes
         </ThemedText>

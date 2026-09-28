@@ -54,6 +54,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     paddingVertical: Spacing.one,
+    minHeight: 44,
   },
   label: {
     flexShrink: 1,

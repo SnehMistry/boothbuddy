@@ -1,53 +1,26 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect, useNavigation } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 import { Card } from '@/components/card';
-import { ChangePasswordModal } from '@/components/change-password-modal';
 import { SkeletonList } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { confirmAction } from '@/lib/confirm';
+import { formatHumanDate } from '@/lib/dates';
 import { getEventsWithStats, type EventWithStats } from '@/lib/storage';
-import { supabase } from '@/lib/supabase';
 
 export default function EventsScreen() {
-  const navigation = useNavigation();
   const theme = useTheme();
   const [events, setEvents] = useState<EventWithStats[] | null>(null);
-  const [changingPassword, setChangingPassword] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       getEventsWithStats().then(setEvents);
     }, []),
   );
-
-  const handleSignOut = async () => {
-    const confirmed = await confirmAction('Sign out?');
-    if (confirmed) supabase.auth.signOut();
-  };
-
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <View style={styles.headerButtons}>
-          <Pressable
-            onPress={() => setChangingPassword(true)}
-            hitSlop={8}
-            accessibilityLabel="Change password">
-            <Ionicons name="key-outline" size={20} color={theme.textMuted} />
-          </Pressable>
-          <Pressable onPress={handleSignOut} hitSlop={8} accessibilityLabel="Sign out">
-            <Ionicons name="log-out-outline" size={20} color={theme.textMuted} />
-          </Pressable>
-        </View>
-      ),
-    });
-  }, [navigation, theme]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['bottom']}>
@@ -75,7 +48,7 @@ export default function EventsScreen() {
               <View style={styles.metaRow}>
                 <Ionicons name="calendar-outline" size={13} color={theme.textMuted} />
                 <ThemedText type="caption" themeColor="textMuted">
-                  {item.date}
+                  {formatHumanDate(item.date)}
                   {item.location ? ` · ${item.location}` : ''}
                 </ThemedText>
               </View>
@@ -112,8 +85,6 @@ export default function EventsScreen() {
           New Event
         </ThemedText>
       </Pressable>
-
-      <ChangePasswordModal visible={changingPassword} onClose={() => setChangingPassword(false)} />
     </SafeAreaView>
   );
 }
@@ -121,10 +92,6 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: Spacing.four,
   },
   emptyState: {
     flex: 1,

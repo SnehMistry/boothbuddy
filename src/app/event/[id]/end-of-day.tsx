@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
@@ -14,6 +15,7 @@ import { Spacing } from '@/constants/theme';
 import { Toast, useToast } from '@/components/toast';
 import { describeAiError } from '@/lib/ai-errors';
 import { deadlineSortKey } from '@/lib/deadlines';
+import { formatHumanDate } from '@/lib/dates';
 import {
   generateFollowup,
   getActionItemsForContacts,
@@ -35,6 +37,7 @@ import type {
 
 export default function EndOfDayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
   const [event, setEvent] = useState<BoothEvent | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
@@ -125,7 +128,7 @@ export default function EndOfDayScreen() {
 
   return (
     <View style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + Spacing.six }]}>
         <ThemedText type="body" themeColor="textMuted">
           Everything to act on tonight for {event.name}
         </ThemedText>
@@ -184,7 +187,7 @@ export default function EndOfDayScreen() {
                       )}
                       {!!job.deadline && (
                         <ThemedText type="caption" themeColor="warning">
-                          Due {job.deadline}
+                          Due {formatHumanDate(job.deadline)}
                         </ThemedText>
                       )}
                     </View>

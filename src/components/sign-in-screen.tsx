@@ -145,7 +145,7 @@ export function SignInScreen() {
               />
               <Pressable
                 onPress={() => setShowPassword((v) => !v)}
-                hitSlop={8}
+                hitSlop={12}
                 style={styles.showPasswordButton}>
                 <Ionicons
                   name={showPassword ? 'eye-off-outline' : 'eye-outline'}

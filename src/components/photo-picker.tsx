@@ -199,7 +199,7 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
               localPreviewUri={localPreviews[photo.id]}
               style={[styles.thumbnail, { borderColor: theme.border }]}
             />
-            <Pressable onPress={() => confirmDelete(photo)} hitSlop={8} style={styles.deleteBadge}>
+            <Pressable onPress={() => confirmDelete(photo)} hitSlop={12} style={styles.deleteBadge}>
               <Ionicons name="close" size={13} color="#ffffff" />
             </Pressable>
           </Pressable>

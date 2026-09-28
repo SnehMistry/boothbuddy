@@ -477,6 +477,35 @@ export async function setJobApplied(id: string, applied: boolean): Promise<void>
   if (error) throw error;
 }
 
+export type UpcomingDeadline = JobOpportunity & {
+  contactName: string;
+  eventId: string;
+  eventName: string;
+};
+
+type UpcomingDeadlineRow = JobOpportunityRow & {
+  contacts: { name: string; event_id: string; events: { name: string } | null } | null;
+};
+
+// A cross-event view for the Deadlines tab — every not-yet-applied job
+// found by AI, wherever it was found, sorted soonest-first. RLS already
+// scopes job_opportunities to the signed-in user, so no explicit user_id
+// filter is needed here.
+export async function getUpcomingDeadlines(): Promise<UpcomingDeadline[]> {
+  const { data, error } = await supabase
+    .from('job_opportunities')
+    .select('*, contacts(name, event_id, events(name))')
+    .eq('applied', false)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data as UpcomingDeadlineRow[]).map((row) => ({
+    ...jobFromRow(row),
+    contactName: row.contacts?.name ?? 'Unknown',
+    eventId: row.contacts?.event_id ?? '',
+    eventName: row.contacts?.events?.name ?? '',
+  }));
+}
+
 // FunctionsHttpError's body is the JSON { error: message } every Edge
 // Function in this app returns on failure — surface that instead of the
 // generic "Edge Function returned a non-2xx status code".
