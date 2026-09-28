@@ -162,6 +162,67 @@ export async function getEvents(): Promise<BoothEvent[]> {
   return (data as EventRow[]).map(eventFromRow);
 }
 
+export type EventWithStats = BoothEvent & { contactCount: number; pendingFollowups: number };
+
+// One extra query (every contact's event_id + followup_status, grouped
+// client-side) rather than one query per event — for the events list's
+// "N contacts, M follow-ups pending" line and the web dashboard's stats
+// header.
+export async function getEventsWithStats(): Promise<EventWithStats[]> {
+  const [events, contactRows] = await Promise.all([
+    getEvents(),
+    supabase.from('contacts').select('event_id, followup_status'),
+  ]);
+  if (contactRows.error) throw contactRows.error;
+
+  const statsByEvent = new Map<string, { contactCount: number; pendingFollowups: number }>();
+  for (const row of contactRows.data as { event_id: string; followup_status: FollowupStatus }[]) {
+    const stats = statsByEvent.get(row.event_id) ?? { contactCount: 0, pendingFollowups: 0 };
+    stats.contactCount += 1;
+    if (row.followup_status === 'not_sent') stats.pendingFollowups += 1;
+    statsByEvent.set(row.event_id, stats);
+  }
+
+  return events.map((event) => ({
+    ...event,
+    ...(statsByEvent.get(event.id) ?? { contactCount: 0, pendingFollowups: 0 }),
+  }));
+}
+
+export type OverallStats = {
+  peopleMet: number;
+  followupsSent: number;
+  applicationsDueThisWeek: number;
+};
+
+// For the web dashboard's stats header. "Due this week" only counts jobs
+// with a deadline that actually parses as a real date — AI-found deadlines
+// are free text ("rolling", "ASAP") and those don't belong in a date-range
+// count, not even as a false negative.
+export async function getOverallStats(): Promise<OverallStats> {
+  const [{ data: contacts, error: contactsError }, { data: jobs, error: jobsError }] = await Promise.all([
+    supabase.from('contacts').select('followup_status'),
+    supabase.from('job_opportunities').select('deadline, applied'),
+  ]);
+  if (contactsError) throw contactsError;
+  if (jobsError) throw jobsError;
+
+  const peopleMet = contacts.length;
+  const followupsSent = contacts.filter(
+    (c) => c.followup_status === 'sent' || c.followup_status === 'replied',
+  ).length;
+
+  const now = Date.now();
+  const weekFromNow = now + 7 * 24 * 60 * 60 * 1000;
+  const applicationsDueThisWeek = jobs.filter((job) => {
+    if (job.applied || !job.deadline) return false;
+    const parsed = Date.parse(job.deadline);
+    return !Number.isNaN(parsed) && parsed >= now && parsed <= weekFromNow;
+  }).length;
+
+  return { peopleMet, followupsSent, applicationsDueThisWeek };
+}
+
 export async function getEvent(id: string): Promise<BoothEvent | undefined> {
   const { data, error } = await supabase.from('events').select('*').eq('id', id).maybeSingle();
   if (error) throw error;

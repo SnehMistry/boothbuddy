@@ -1,16 +1,24 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
 import { AiErrorNotice } from '@/components/ai-error-notice';
+import { Avatar } from '@/components/avatar';
+import { Badge } from '@/components/badge';
+import { Button } from '@/components/button';
+import { Chip } from '@/components/chip';
+import { ExternalLinkRow } from '@/components/external-link-row';
 import { FollowupCard } from '@/components/followup-card';
+import { InterestBadge, InterestPicker } from '@/components/interest-picker';
 import { LoadingView } from '@/components/loading-view';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Toast, useToast } from '@/components/toast';
+import { Radius, Spacing } from '@/constants/theme';
 import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filter';
 import { useTheme } from '@/hooks/use-theme';
+import { confirmAction } from '@/lib/confirm';
 import { describeAiError } from '@/lib/ai-errors';
 import {
   deleteContact,
@@ -18,39 +26,41 @@ import {
   generateFollowup,
   getContactsForEvent,
   getEvent,
+  getJobsForContacts,
   processContact,
   setResearchMatchStatus,
   updateContact,
 } from '@/lib/storage';
-import { INTEREST_LEVELS, type BoothEvent, type Contact, type FollowupTone, type InterestLevel } from '@/lib/types';
+import {
+  INTEREST_LEVELS,
+  type BoothEvent,
+  type Contact,
+  type FollowupTone,
+  type InterestLevel,
+} from '@/lib/types';
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-const INTEREST_LABELS: Record<InterestLevel, string> = {
-  hot: '🔥 Hot',
-  warm: '🌤️ Warm',
-  cold: '❄️ Cold',
-};
-
 const INTEREST_FILTER_LABELS: Record<InterestFilter, string> = {
   all: 'All',
-  ...INTEREST_LABELS,
+  hot: 'Hot',
+  warm: 'Warm',
+  cold: 'Cold',
 };
 
-const AI_STATUS_LABELS: Record<Contact['aiStatus'], string> = {
-  idle: '—',
-  processing: '✨ Processing…',
-  done: '✨ Done',
-  error: '⚠️ Failed',
-};
+function AiStatusChip({ status, error }: { status: Contact['aiStatus']; error?: string }) {
+  if (status === 'idle') return <ThemedText type="caption" themeColor="textMuted">—</ThemedText>;
+  if (status === 'processing') return <Badge label="Processing…" tone="accent" />;
+  if (status === 'error') return <Badge label="Failed" tone="danger" />;
+  return <Badge label="Done" tone="success" />;
+}
 
 function ContactDetailPanel({
   contact,
   processing,
   generating,
-  copiedKey,
   onCopy,
   onProcess,
   onRegenerateFollowup,
@@ -62,8 +72,7 @@ function ContactDetailPanel({
   contact: Contact;
   processing: boolean;
   generating: boolean;
-  copiedKey: string | null;
-  onCopy: (key: string, text: string) => void;
+  onCopy: (text: string) => void;
   onProcess: (contact: Contact) => void;
   onRegenerateFollowup: (contact: Contact, tone: FollowupTone) => void;
   onFollowupStatusChange: Parameters<typeof FollowupCard>[0]['onStatusChange'];
@@ -71,141 +80,136 @@ function ContactDetailPanel({
   onMatchStatus: (contact: Contact, status: 'confirmed' | 'rejected') => void;
   onDelete: (contact: Contact) => void;
 }) {
+  const theme = useTheme();
+
   return (
     <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
-      <ThemedText type="subtitle">{contact.name || 'Unnamed contact'}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        Captured {formatDateTime(contact.createdAt)}
-        {contact.title || contact.company
-          ? ` · ${[contact.title, contact.company].filter(Boolean).join(' at ')}`
-          : ''}
-      </ThemedText>
+      <View style={styles.panelHeader}>
+        <Avatar name={contact.name || '?'} size={48} />
+        <View style={styles.flexShrink}>
+          <ThemedText type="title">{contact.name || 'Unnamed contact'}</ThemedText>
+          <ThemedText type="caption" themeColor="textMuted">
+            Captured {formatDateTime(contact.createdAt)}
+            {contact.title || contact.company
+              ? ` · ${[contact.title, contact.company].filter(Boolean).join(' at ')}`
+              : ''}
+          </ThemedText>
+        </View>
+      </View>
       <Pressable onPress={() => router.push(`/contact/${contact.id}`)}>
-        <ThemedText type="link" themeColor="textSecondary">
+        <ThemedText type="link" themeColor="accent">
           Edit notes, photos & raw details →
         </ThemedText>
       </Pressable>
 
-      <ThemedView style={styles.chipRow}>
-        {INTEREST_LEVELS.map((level) => (
-          <Pressable
-            key={level}
-            onPress={() => onInterestChange(contact, level)}
-            style={[styles.chip, contact.interestLevel === level && styles.chipSelected]}>
-            <ThemedText type="small">{INTEREST_LABELS[level]}</ThemedText>
-          </Pressable>
-        ))}
-      </ThemedView>
+      <InterestPicker value={contact.interestLevel} onChange={(level) => onInterestChange(contact, level)} />
 
       {contact.aiStatus === 'done' ? (
-        <ThemedView type="backgroundElement" style={styles.card}>
-          {!!contact.summary && <ThemedText type="small">{contact.summary}</ThemedText>}
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          {!!contact.summary && <ThemedText type="body">{contact.summary}</ThemedText>}
           {!!contact.topics?.length && (
-            <ThemedView style={styles.chipRow}>
+            <View style={styles.chipRow}>
               {contact.topics.map((topic) => (
-                <ThemedView key={topic} type="backgroundSelected" style={styles.tagChip}>
-                  <ThemedText type="small">{topic}</ThemedText>
-                </ThemedView>
+                <Chip key={topic} label={topic} />
               ))}
-            </ThemedView>
+            </View>
           )}
           {!!contact.rolesMentioned?.length && (
-            <ThemedText type="small">
-              Roles: {contact.rolesMentioned.join(', ')}
-            </ThemedText>
+            <View style={styles.cardSection}>
+              <ThemedText type="label" themeColor="textMuted">
+                <Ionicons name="briefcase-outline" size={12} /> Roles / opportunities
+              </ThemedText>
+              {contact.rolesMentioned.map((role, i) => (
+                <ThemedText key={i} type="body">
+                  • {role}
+                </ThemedText>
+              ))}
+            </View>
           )}
           {!!contact.deadlines?.length && (
-            <ThemedText type="small">Deadlines: {contact.deadlines.join(', ')}</ThemedText>
+            <View style={styles.cardSection}>
+              <ThemedText type="label" themeColor="textMuted">
+                <Ionicons name="time-outline" size={12} /> Deadlines
+              </ThemedText>
+              {contact.deadlines.map((deadline, i) => (
+                <Badge key={i} label={deadline} tone="warning" />
+              ))}
+            </View>
           )}
-          {!!contact.memorable && <ThemedText type="small">💭 {contact.memorable}</ThemedText>}
-          {!!contact.email && (
-            <Pressable onPress={() => Linking.openURL(`mailto:${contact.email}`)}>
-              <ThemedText type="linkPrimary">{contact.email}</ThemedText>
-            </Pressable>
+          {!!contact.memorable && (
+            <View style={styles.cardSection}>
+              <ThemedText type="label" themeColor="textMuted">
+                <Ionicons name="heart-outline" size={12} /> Memorable
+              </ThemedText>
+              <ThemedText type="body">{contact.memorable}</ThemedText>
+            </View>
           )}
-          {!!contact.linkedinUrl && (
-            <Pressable onPress={() => Linking.openURL(contact.linkedinUrl!)}>
-              <ThemedText type="linkPrimary">{contact.linkedinUrl}</ThemedText>
-            </Pressable>
-          )}
+          {!!contact.email && <ExternalLinkRow url={`mailto:${contact.email}`} label={contact.email} />}
+          {!!contact.linkedinUrl && <ExternalLinkRow url={contact.linkedinUrl} />}
 
           {!!contact.research && (
-            <ThemedView style={styles.researchBlock}>
-              <ThemedText type="smallBold">
+            <View style={styles.researchBlock}>
+              <ThemedText type="bodyBold">
                 Research —{' '}
-                {contact.research.grounded ? 'live-searched' : "AI's own knowledge only"}
+                <ThemedText type="body" themeColor={contact.research.grounded ? 'success' : 'textMuted'}>
+                  {contact.research.grounded ? 'live-searched' : "AI's own knowledge only"}
+                </ThemedText>
               </ThemedText>
               {!!contact.research.person.summary && (
-                <ThemedText type="small">
+                <ThemedText type="body">
                   {contact.research.person.summary}{' '}
-                  <ThemedText type="small" themeColor="textSecondary">
+                  <ThemedText type="caption" themeColor="textMuted">
                     ({contact.research.person.confidence} confidence)
                   </ThemedText>
                 </ThemedText>
               )}
               {!!contact.research.company.summary && (
-                <ThemedText type="small">{contact.research.company.summary}</ThemedText>
+                <ThemedText type="body">{contact.research.company.summary}</ThemedText>
               )}
               {contact.research.matchStatus === 'unconfirmed' ? (
-                <ThemedView style={styles.chipRow}>
-                  <Pressable
-                    onPress={() => onMatchStatus(contact, 'confirmed')}
-                    style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}>
-                    <ThemedText type="smallBold" style={styles.aiButtonText}>
-                      ✓ This is them
-                    </ThemedText>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => onMatchStatus(contact, 'rejected')}
-                    style={({ pressed }) => [styles.rejectButton, pressed && styles.pressed]}>
-                    <ThemedText type="smallBold">✗ Wrong person</ThemedText>
-                  </Pressable>
-                </ThemedView>
+                <View style={styles.chipRow}>
+                  <Button label="This is them" icon="checkmark" onPress={() => onMatchStatus(contact, 'confirmed')} />
+                  <Button label="Wrong person" variant="secondary" onPress={() => onMatchStatus(contact, 'rejected')} />
+                </View>
               ) : (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {contact.research.matchStatus === 'confirmed' ? '✓ Confirmed' : '✗ Rejected'}
-                </ThemedText>
+                <Badge
+                  label={contact.research.matchStatus === 'confirmed' ? 'Match confirmed' : 'Match rejected'}
+                  tone={contact.research.matchStatus === 'confirmed' ? 'success' : 'neutral'}
+                />
               )}
-            </ThemedView>
+            </View>
           )}
-        </ThemedView>
+        </View>
       ) : (
         <>
           {contact.aiStatus === 'error' && <AiErrorNotice error={contact.aiError} />}
-          <Pressable
+          <Button
+            label={processing ? 'AI busy, retrying…' : contact.aiStatus === 'error' ? 'Retry' : 'Process with AI'}
+            icon="sparkles"
+            loading={processing}
             onPress={() => onProcess(contact)}
-            disabled={processing}
-            style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}>
-            <ThemedText type="smallBold" style={styles.aiButtonText}>
-              {processing
-                ? 'AI busy, retrying…'
-                : contact.aiStatus === 'error'
-                  ? 'Retry'
-                  : '✨ Process with AI'}
-            </ThemedText>
-          </Pressable>
+          />
         </>
       )}
 
-      <ThemedText type="smallBold" style={styles.sectionSpacing}>
+      <ThemedText type="title" style={styles.sectionSpacing}>
         Follow-up draft
       </ThemedText>
       <FollowupCard
         contact={contact}
         generating={generating}
-        copiedKey={copiedKey}
         onCopy={onCopy}
         onRegenerate={onRegenerateFollowup}
         onStatusChange={onFollowupStatusChange}
       />
 
-      <Pressable
+      <Button
+        label="Delete Contact"
+        variant="danger"
+        icon="trash-outline"
         onPress={() => onDelete(contact)}
-        style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}>
-        <ThemedText type="smallBold" style={styles.deleteButtonText}>
-          Delete Contact
-        </ThemedText>
-      </Pressable>
+        style={styles.deleteButton}
+      />
     </ScrollView>
   );
 }
@@ -216,19 +220,32 @@ export default function EventDashboardScreen() {
   const theme = useTheme();
   const [event, setEvent] = useState<BoothEvent | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [dueThisWeek, setDueThisWeek] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const { toastMessage, showToast } = useToast();
   const { filtered, search, setSearch, interestFilter, setInterestFilter } =
     useContactFilter(contacts);
 
-  const load = useCallback(() => {
-    getEvent(id).then((found) => {
-      setEvent(found ?? null);
-      if (found) navigation.setOptions({ title: found.name });
-    });
-    getContactsForEvent(id).then(setContacts);
+  const load = useCallback(async () => {
+    const [foundEvent, foundContacts] = await Promise.all([getEvent(id), getContactsForEvent(id)]);
+    setEvent(foundEvent ?? null);
+    setContacts(foundContacts);
+    if (foundEvent) navigation.setOptions({ title: foundEvent.name });
+    const foundJobs = await getJobsForContacts(foundContacts.map((c) => c.id));
+    // Plain async callback, not render/an effect — Date.now() here doesn't
+    // trip the render-purity lint rule the way it would in the component
+    // body.
+    const now = Date.now();
+    const weekFromNow = now + 7 * 24 * 60 * 60 * 1000;
+    setDueThisWeek(
+      foundJobs.filter((job) => {
+        if (job.applied || !job.deadline) return false;
+        const parsed = Date.parse(job.deadline);
+        return !Number.isNaN(parsed) && parsed >= now && parsed <= weekFromNow;
+      }).length,
+    );
   }, [id, navigation]);
 
   useFocusEffect(
@@ -285,10 +302,9 @@ export default function EventDashboardScreen() {
     if (updated) setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   };
 
-  const handleCopy = async (key: string, text: string) => {
+  const handleCopy = async (text: string) => {
     await Clipboard.setStringAsync(text);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 1500);
+    showToast('Copied!');
   };
 
   const handleRegenerateFollowup = async (contact: Contact, tone: FollowupTone) => {
@@ -314,159 +330,162 @@ export default function EventDashboardScreen() {
     await updateContact(contact.id, { followupStatus }).catch(() => {});
   };
 
-  const handleDeleteContact = (contact: Contact) => {
-    Alert.alert(
+  const handleDeleteContact = async (contact: Contact) => {
+    const confirmed = await confirmAction(
       'Delete this contact?',
       `${contact.name || 'This contact'}, their photos, and any AI research/drafts will be permanently deleted.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteContact(contact);
-              setContacts((prev) => prev.filter((c) => c.id !== contact.id));
-              setSelectedId((current) => (current === contact.id ? null : current));
-            } catch (error) {
-              Alert.alert(
-                "Couldn't delete contact",
-                error instanceof Error ? error.message : 'Something went wrong. Please try again.',
-              );
-            }
-          },
-        },
-      ],
     );
+    if (!confirmed) return;
+    try {
+      await deleteContact(contact);
+      setContacts((prev) => prev.filter((c) => c.id !== contact.id));
+      setSelectedId((current) => (current === contact.id ? null : current));
+    } catch (error) {
+      Alert.alert(
+        "Couldn't delete contact",
+        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      );
+    }
   };
 
-  const handleDeleteEvent = () => {
+  const handleDeleteEvent = async () => {
     if (!event) return;
-    Alert.alert(
+    const confirmed = await confirmAction(
       'Delete this event?',
       `${event.name} and all of its contacts, photos, and drafts will be permanently deleted.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteEvent(id);
-              router.replace('/');
-            } catch (error) {
-              Alert.alert(
-                "Couldn't delete event",
-                error instanceof Error ? error.message : 'Something went wrong. Please try again.',
-              );
-            }
-          },
-        },
-      ],
     );
+    if (!confirmed) return;
+    try {
+      await deleteEvent(id);
+      router.replace('/');
+    } catch (error) {
+      Alert.alert(
+        "Couldn't delete event",
+        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      );
+    }
   };
 
   if (!event) return <LoadingView />;
 
+  const followupsSent = contacts.filter(
+    (c) => c.followupStatus === 'sent' || c.followupStatus === 'replied',
+  ).length;
+
   return (
-    <ThemedView style={styles.root}>
-      <ThemedView style={styles.tableColumn}>
-        <ThemedView style={styles.toolbar}>
-          <ThemedText type="small" themeColor="textSecondary">
+    <View style={styles.root}>
+      <View style={[styles.tableColumn, { borderRightColor: theme.border }]}>
+        <View style={styles.toolbar}>
+          <ThemedText type="caption" themeColor="textMuted">
             {event.date}
-            {event.location ? ` · ${event.location}` : ''} · {contacts.length}{' '}
-            {contacts.length === 1 ? 'contact' : 'contacts'}
+            {event.location ? ` · ${event.location}` : ''}
           </ThemedText>
-          <ThemedView style={styles.toolbarButtons}>
-            <Pressable onPress={() => router.push(`/event/${id}/new-contact`)}>
-              <ThemedText type="link">+ New Contact</ThemedText>
-            </Pressable>
-            <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)}>
-              <ThemedText type="link">End of Day →</ThemedText>
-            </Pressable>
-            <Pressable onPress={handleDeleteEvent}>
-              <ThemedText type="link" themeColor="textSecondary">
-                Delete Event
+          <View style={styles.toolbarButtons}>
+            <Pressable onPress={() => router.push(`/event/${id}/new-contact`)} style={styles.toolbarLink}>
+              <Ionicons name="add-circle-outline" size={15} color={theme.accent} />
+              <ThemedText type="link" themeColor="accent">
+                New Contact
               </ThemedText>
             </Pressable>
-          </ThemedView>
-        </ThemedView>
+            <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)} style={styles.toolbarLink}>
+              <Ionicons name="moon-outline" size={15} color={theme.accent} />
+              <ThemedText type="link" themeColor="accent">
+                End of Day
+              </ThemedText>
+            </Pressable>
+            <Pressable onPress={handleDeleteEvent} style={styles.toolbarLink}>
+              <Ionicons name="trash-outline" size={15} color={theme.danger} />
+              <ThemedText type="link" themeColor="danger">
+                Delete
+              </ThemedText>
+            </Pressable>
+          </View>
+        </View>
 
-        <ThemedView style={styles.searchBar}>
+        <View style={styles.statsRow}>
+          <View style={[styles.statTile, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <ThemedText type="title">{contacts.length}</ThemedText>
+            <ThemedText type="caption" themeColor="textMuted">
+              People met
+            </ThemedText>
+          </View>
+          <View style={[styles.statTile, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <ThemedText type="title">{followupsSent}</ThemedText>
+            <ThemedText type="caption" themeColor="textMuted">
+              Follow-ups sent
+            </ThemedText>
+          </View>
+          <View style={[styles.statTile, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <ThemedText type="title" themeColor={dueThisWeek > 0 ? 'warning' : 'text'}>
+              {dueThisWeek}
+            </ThemedText>
+            <ThemedText type="caption" themeColor="textMuted">
+              Due this week
+            </ThemedText>
+          </View>
+        </View>
+
+        <View style={[styles.searchInputWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Ionicons name="search" size={15} color={theme.textMuted} />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Search name or company…"
-            placeholderTextColor={theme.textSecondary}
-            style={[styles.searchInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+            placeholderTextColor={theme.textMuted}
+            style={[styles.searchInput, { color: theme.text }]}
           />
-          <ThemedView style={styles.chipRow}>
-            {(['all', ...INTEREST_LEVELS] as InterestFilter[]).map((level) => (
-              <Pressable
-                key={level}
-                onPress={() => setInterestFilter(level)}
-                style={[styles.chip, interestFilter === level && styles.chipSelected]}>
-                <ThemedText type="small">{INTEREST_FILTER_LABELS[level]}</ThemedText>
-              </Pressable>
-            ))}
-          </ThemedView>
-        </ThemedView>
+        </View>
+        <View style={styles.chipRow}>
+          {(['all', ...INTEREST_LEVELS] as InterestFilter[]).map((level) => (
+            <Chip
+              key={level}
+              label={INTEREST_FILTER_LABELS[level]}
+              selected={interestFilter === level}
+              onPress={() => setInterestFilter(level)}
+            />
+          ))}
+        </View>
 
         {contacts.length === 0 ? (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
+          <ThemedText type="body" themeColor="textMuted" style={styles.emptyText}>
             No contacts yet — add one, or capture them on your phone.
           </ThemedText>
         ) : filtered.length === 0 ? (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
+          <ThemedText type="body" themeColor="textMuted" style={styles.emptyText}>
             No contacts match.
           </ThemedText>
         ) : (
           <ScrollView style={styles.table}>
-            <ThemedView style={[styles.tableRow, styles.tableHeaderRow]}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.colName}>
-                Name
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.colCompany}>
-                Company
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.colInterest}>
-                Interest
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.colStatus}>
-                AI
-              </ThemedText>
-            </ThemedView>
             {filtered.map((contact) => (
               <Pressable
                 key={contact.id}
                 onPress={() => setSelectedId(contact.id)}
-                style={[styles.tableRow, selectedId === contact.id && styles.tableRowSelected]}>
-                <ThemedText type="small" style={styles.colName}>
-                  {contact.name || 'Unnamed'}
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.colCompany}>
-                  {contact.company ?? '—'}
-                </ThemedText>
-                <ThemedText type="small" style={styles.colInterest}>
-                  {contact.interestLevel ? INTEREST_LABELS[contact.interestLevel] : '—'}
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.colStatus}>
-                  {AI_STATUS_LABELS[contact.aiStatus]}
-                </ThemedText>
+                style={[
+                  styles.tableRow,
+                  selectedId === contact.id && { backgroundColor: theme.accentMuted },
+                ]}>
+                <Avatar name={contact.name || '?'} size={32} />
+                <View style={styles.colName}>
+                  <ThemedText type="bodyBold" numberOfLines={1}>
+                    {contact.name || 'Unnamed'}
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="textMuted" numberOfLines={1}>
+                    {contact.company ?? '—'}
+                  </ThemedText>
+                </View>
+                {contact.interestLevel && <InterestBadge level={contact.interestLevel} />}
+                <AiStatusChip status={contact.aiStatus} />
               </Pressable>
             ))}
           </ScrollView>
         )}
-      </ThemedView>
-
-      <ThemedView type="backgroundElement" style={styles.divider} />
+      </View>
 
       {selected ? (
         <ContactDetailPanel
           contact={selected}
           processing={processingId === selected.id}
           generating={generatingId === selected.id}
-          copiedKey={copiedKey}
           onCopy={handleCopy}
           onProcess={handleProcess}
           onRegenerateFollowup={handleRegenerateFollowup}
@@ -476,13 +495,15 @@ export default function EventDashboardScreen() {
           onDelete={handleDeleteContact}
         />
       ) : (
-        <ThemedView style={styles.panelEmpty}>
-          <ThemedText themeColor="textSecondary">
+        <View style={styles.panelEmpty}>
+          <Ionicons name="person-circle-outline" size={40} color={theme.textMuted} />
+          <ThemedText type="body" themeColor="textMuted">
             Select a contact to review their card and draft a follow-up.
           </ThemedText>
-        </ThemedView>
+        </View>
       )}
-    </ThemedView>
+      <Toast message={toastMessage} />
+    </View>
   );
 }
 
@@ -495,20 +516,41 @@ const styles = StyleSheet.create({
     width: 420,
     padding: Spacing.three,
     gap: Spacing.two,
+    borderRightWidth: 1,
   },
   toolbar: {
     gap: Spacing.one,
   },
   toolbarButtons: {
     flexDirection: 'row',
-    gap: Spacing.three,
+    gap: Spacing.four,
   },
-  searchBar: {
+  toolbarLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
     gap: Spacing.two,
   },
-  searchInput: {
-    borderRadius: Spacing.two,
+  statTile: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     paddingHorizontal: Spacing.three,
+  },
+  searchInput: {
+    flex: 1,
     paddingVertical: Spacing.two,
     fontSize: 15,
   },
@@ -523,31 +565,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.one,
-    borderRadius: Spacing.two,
-    gap: Spacing.one,
-  },
-  tableHeaderRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#60646c33',
-  },
-  tableRowSelected: {
-    backgroundColor: '#3c87f71a',
+    borderRadius: Radius.medium,
+    gap: Spacing.two,
   },
   colName: {
-    flex: 1.2,
-    fontWeight: '700',
-  },
-  colCompany: {
     flex: 1,
-  },
-  colInterest: {
-    width: 70,
-  },
-  colStatus: {
-    width: 90,
-  },
-  divider: {
-    width: 1,
+    gap: 1,
   },
   panel: {
     flex: 1,
@@ -557,78 +580,42 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     maxWidth: 640,
   },
+  panelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
   panelEmpty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.two,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
   },
-  chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.five,
-    borderWidth: 1,
-    borderColor: '#60646c55',
-  },
-  chipSelected: {
-    borderColor: '#3c87f7',
-    borderWidth: 2,
-  },
-  tagChip: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.half,
-    borderRadius: Spacing.five,
-  },
   card: {
     padding: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.large,
+    borderWidth: 1,
     gap: Spacing.two,
+  },
+  cardSection: {
+    gap: Spacing.half,
   },
   researchBlock: {
     gap: Spacing.two,
     marginTop: Spacing.two,
-  },
-  aiButton: {
-    backgroundColor: '#3c87f7',
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  aiButtonText: {
-    color: '#ffffff',
-  },
-  rejectButton: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
-    borderWidth: 1,
-    borderColor: '#60646c',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  pressed: {
-    opacity: 0.7,
   },
   sectionSpacing: {
     marginTop: Spacing.four,
   },
   deleteButton: {
     marginTop: Spacing.six,
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.three,
-    borderWidth: 1,
-    borderColor: '#e0483e',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: Spacing.four,
   },
-  deleteButtonText: {
-    color: '#e0483e',
+  flexShrink: {
+    flexShrink: 1,
   },
 });

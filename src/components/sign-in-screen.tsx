@@ -1,15 +1,19 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 
@@ -40,6 +44,7 @@ export function SignInScreen() {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,79 +82,110 @@ export function SignInScreen() {
   const canSubmit = email.trim().length > 0 && password.length > 0 && !submitting;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ThemedText type="title" style={styles.title}>
-          BoothBuddy
-        </ThemedText>
-        <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-          {mode === 'sign-in' ? 'Sign in to your account' : 'Create an account'}
-        </ThemedText>
-
-        <TextInput
-          autoFocus
-          value={email}
-          onChangeText={(text) => {
-            setEmail(text);
-            setError(null);
-          }}
-          placeholder="you@example.com"
-          placeholderTextColor={theme.textSecondary}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-        />
-        <TextInput
-          value={password}
-          onChangeText={(text) => {
-            setPassword(text);
-            setError(null);
-          }}
-          placeholder={
-            mode === 'sign-up' ? `Password (min ${MIN_PASSWORD_LENGTH} characters)` : 'Password'
-          }
-          placeholderTextColor={theme.textSecondary}
-          secureTextEntry
-          textContentType={mode === 'sign-up' ? 'newPassword' : 'password'}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-        />
-
-        {error && (
-          <ThemedText type="small" style={styles.errorText}>
-            {error}
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={[styles.logo, { backgroundColor: theme.accent }]}>
+            <Ionicons name="id-card" size={32} color="#FFFFFF" />
+          </View>
+          <ThemedText type="title" style={styles.title}>
+            BoothBuddy
           </ThemedText>
-        )}
-
-        <Pressable
-          onPress={handleSubmit}
-          disabled={!canSubmit}
-          style={({ pressed }) => [
-            styles.button,
-            !canSubmit && styles.buttonDisabled,
-            pressed && styles.pressed,
-          ]}>
-          <ThemedText type="smallBold" style={styles.buttonText}>
-            {submitting
-              ? mode === 'sign-in'
-                ? 'Signing in…'
-                : 'Creating account…'
-              : mode === 'sign-in'
-                ? 'Sign In'
-                : 'Create Account'}
+          <ThemedText type="body" themeColor="textMuted" style={styles.tagline}>
+            Remember everyone you meet.
           </ThemedText>
-        </Pressable>
 
-        <Pressable onPress={switchMode} style={styles.linkButton}>
-          <ThemedText type="link" themeColor="textSecondary">
-            {mode === 'sign-in'
-              ? "Don't have an account? Sign up"
-              : 'Already have an account? Sign in'}
-          </ThemedText>
-        </Pressable>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <ThemedText type="heading" style={styles.formTitle}>
+              {mode === 'sign-in' ? 'Sign in' : 'Create your account'}
+            </ThemedText>
+
+            <ThemedText type="label" themeColor="textMuted">
+              Email
+            </ThemedText>
+            <TextInput
+              autoFocus
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                setError(null);
+              }}
+              placeholder="you@example.com"
+              placeholderTextColor={theme.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              style={[styles.input, { color: theme.text, backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
+            />
+
+            <ThemedText type="label" themeColor="textMuted" style={styles.fieldSpacing}>
+              Password
+            </ThemedText>
+            <View style={styles.passwordRow}>
+              <TextInput
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setError(null);
+                }}
+                placeholder={
+                  mode === 'sign-up' ? `Min ${MIN_PASSWORD_LENGTH} characters` : 'Password'
+                }
+                placeholderTextColor={theme.textMuted}
+                secureTextEntry={!showPassword}
+                textContentType={mode === 'sign-up' ? 'newPassword' : 'password'}
+                style={[
+                  styles.input,
+                  styles.passwordInput,
+                  { color: theme.text, backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+                ]}
+              />
+              <Pressable
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={8}
+                style={styles.showPasswordButton}>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={theme.textMuted}
+                />
+              </Pressable>
+            </View>
+
+            {!!error && (
+              <ThemedText type="body" themeColor="danger" style={styles.errorText}>
+                {error}
+              </ThemedText>
+            )}
+
+            <Button
+              label={
+                submitting
+                  ? mode === 'sign-in'
+                    ? 'Signing in…'
+                    : 'Creating account…'
+                  : mode === 'sign-in'
+                    ? 'Sign In'
+                    : 'Create Account'
+              }
+              onPress={handleSubmit}
+              disabled={!canSubmit}
+              loading={submitting}
+              style={styles.submitButton}
+            />
+          </View>
+
+          <Pressable onPress={switchMode} style={styles.linkButton}>
+            <ThemedText type="link" themeColor="textMuted">
+              {mode === 'sign-in'
+                ? "Don't have an account? Sign up"
+                : 'Already have an account? Sign in'}
+            </ThemedText>
+          </Pressable>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -161,46 +197,76 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: Spacing.five,
-    gap: Spacing.two,
+    paddingVertical: Spacing.six,
+    gap: Spacing.one,
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  logo: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.large,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: Spacing.three,
   },
   title: {
     textAlign: 'center',
-    marginBottom: Spacing.one,
   },
-  subtitle: {
+  tagline: {
     textAlign: 'center',
-    marginBottom: Spacing.four,
+    marginBottom: Spacing.five,
+  },
+  card: {
+    borderRadius: Radius.large,
+    borderWidth: 1,
+    padding: Spacing.four,
+    gap: Spacing.one,
+  },
+  formTitle: {
+    marginBottom: Spacing.two,
+  },
+  fieldSpacing: {
+    marginTop: Spacing.three,
   },
   input: {
-    borderRadius: Spacing.two,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
     fontSize: 16,
-    marginBottom: Spacing.two,
+    marginTop: Spacing.one,
   },
-  errorText: {
-    color: '#e0483e',
-    marginBottom: Spacing.two,
-  },
-  button: {
-    backgroundColor: '#3c87f7',
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.three,
+  passwordRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  buttonDisabled: {
-    opacity: 0.5,
+  passwordInput: {
+    flex: 1,
   },
-  buttonText: {
-    color: '#ffffff',
+  showPasswordButton: {
+    position: 'absolute',
+    right: Spacing.three,
+    top: Spacing.one + 14,
   },
-  pressed: {
-    opacity: 0.7,
+  errorText: {
+    marginTop: Spacing.two,
+  },
+  submitButton: {
+    marginTop: Spacing.four,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
   },
   linkButton: {
     alignItems: 'center',
     padding: Spacing.three,
+    marginTop: Spacing.two,
   },
 });

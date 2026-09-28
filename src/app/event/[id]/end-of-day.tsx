@@ -1,13 +1,17 @@
 import { useCallback, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
+import { Button } from '@/components/button';
+import { Card } from '@/components/card';
+import { Checkbox } from '@/components/checkbox';
+import { ExternalLinkRow } from '@/components/external-link-row';
 import { FollowupCard } from '@/components/followup-card';
 import { LoadingView } from '@/components/loading-view';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { Toast, useToast } from '@/components/toast';
 import { describeAiError } from '@/lib/ai-errors';
 import {
   generateFollowup,
@@ -47,7 +51,7 @@ export default function EndOfDayScreen() {
   const [draftAllProgress, setDraftAllProgress] = useState<{ done: number; total: number } | null>(
     null,
   );
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const { toastMessage, showToast } = useToast();
 
   const load = useCallback(async () => {
     const [foundEvent, foundContacts] = await Promise.all([getEvent(id), getContactsForEvent(id)]);
@@ -68,10 +72,9 @@ export default function EndOfDayScreen() {
     }, [load]),
   );
 
-  const handleCopy = async (key: string, text: string) => {
+  const handleCopy = async (text: string) => {
     await Clipboard.setStringAsync(text);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 1500);
+    showToast('Copied!');
   };
 
   const handleRegenerate = async (contact: Contact, tone: FollowupTone) => {
@@ -129,94 +132,107 @@ export default function EndOfDayScreen() {
   if (!event) return <LoadingView />;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <ThemedText type="small" themeColor="textSecondary">
-        Everything to act on tonight for {event.name}
-      </ThemedText>
-
-      {draftsMissing > 0 && (
-        <Pressable
-          onPress={handleDraftAll}
-          disabled={!!draftAllProgress}
-          style={({ pressed }) => [styles.aiButton, styles.draftAllButton, pressed && styles.pressed]}>
-          <ThemedText type="smallBold" style={styles.aiButtonText}>
-            {draftAllProgress
-              ? `Drafting… ${draftAllProgress.done}/${draftAllProgress.total}`
-              : `✨ Draft All Follow-ups (${draftsMissing})`}
-          </ThemedText>
-        </Pressable>
-      )}
-
-      {contacts.length === 0 ? (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
-          No contacts at this event yet.
+    <View style={styles.flex}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <ThemedText type="body" themeColor="textMuted">
+          Everything to act on tonight for {event.name}
         </ThemedText>
-      ) : (
-        <ThemedView style={styles.sectionSpacing}>
-          <ThemedText type="smallBold">Follow-ups</ThemedText>
-          {contacts.map((contact) => (
-            <FollowupCard
-              key={contact.id}
-              contact={contact}
-              generating={generatingId === contact.id}
-              copiedKey={copiedKey}
-              onCopy={handleCopy}
-              onRegenerate={handleRegenerate}
-              onStatusChange={handleStatusChange}
-            />
-          ))}
-        </ThemedView>
-      )}
 
-      {sortedJobs.length > 0 && (
-        <ThemedView style={styles.sectionSpacing}>
-          <ThemedText type="smallBold">Jobs to apply for</ThemedText>
-          {sortedJobs.map((job) => (
-            <ThemedView key={job.id} type="backgroundElement" style={styles.listRow}>
-              <Pressable onPress={() => toggleJobApplied(job)} style={styles.flexShrink}>
-                <ThemedText type="small">
-                  {job.applied ? '☑' : '☐'} {job.title}
-                  {contactById.get(job.contactId)?.company
-                    ? ` — ${contactById.get(job.contactId)?.company}`
-                    : ''}
-                  {job.deadline ? ` — due ${job.deadline}` : ''}
-                </ThemedText>
-              </Pressable>
-              {!!job.url && (
-                <Pressable onPress={() => Linking.openURL(job.url!)}>
-                  <ThemedText type="link" themeColor="textSecondary">
-                    Open
-                  </ThemedText>
-                </Pressable>
-              )}
-            </ThemedView>
-          ))}
-        </ThemedView>
-      )}
+        {draftsMissing > 0 && (
+          <Button
+            label={
+              draftAllProgress
+                ? `Drafting… ${draftAllProgress.done}/${draftAllProgress.total}`
+                : `Draft All Follow-ups (${draftsMissing})`
+            }
+            icon="sparkles"
+            onPress={handleDraftAll}
+            loading={!!draftAllProgress}
+            style={styles.draftAllButton}
+          />
+        )}
 
-      {actionItems.length > 0 && (
-        <ThemedView style={styles.sectionSpacing}>
-          <ThemedText type="smallBold">Action items</ThemedText>
-          {actionItems.map((item) => (
-            <Pressable
-              key={item.id}
-              onPress={() => toggleActionItem(item)}
-              style={[styles.listRow, { backgroundColor: 'transparent' }]}>
-              <ThemedText type="small">
-                {item.done ? '☑' : '☐'} {item.text}
-                {contactById.get(item.contactId)
-                  ? ` — ${contactById.get(item.contactId)!.name}`
-                  : ''}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </ThemedView>
-      )}
-    </ScrollView>
+        {contacts.length === 0 ? (
+          <ThemedText type="body" themeColor="textMuted" style={styles.sectionSpacing}>
+            No contacts at this event yet.
+          </ThemedText>
+        ) : (
+          <View style={styles.sectionSpacing}>
+            <ThemedText type="title">Follow-ups</ThemedText>
+            {contacts.map((contact) => (
+              <FollowupCard
+                key={contact.id}
+                contact={contact}
+                generating={generatingId === contact.id}
+                onCopy={handleCopy}
+                onRegenerate={handleRegenerate}
+                onStatusChange={handleStatusChange}
+              />
+            ))}
+          </View>
+        )}
+
+        {sortedJobs.length > 0 && (
+          <View style={styles.sectionSpacing}>
+            <ThemedText type="title">Jobs to apply for</ThemedText>
+            <Card>
+              {sortedJobs.map((job) => (
+                <View key={job.id} style={styles.listRow}>
+                  <View style={styles.flexShrink}>
+                    <Checkbox
+                      label={job.title}
+                      checked={job.applied}
+                      onPress={() => toggleJobApplied(job)}
+                    />
+                    <View style={styles.jobMetaRow}>
+                      {!!contactById.get(job.contactId)?.company && (
+                        <ThemedText type="caption" themeColor="textMuted">
+                          {contactById.get(job.contactId)?.company}
+                        </ThemedText>
+                      )}
+                      {!!job.deadline && (
+                        <ThemedText type="caption" themeColor="warning">
+                          Due {job.deadline}
+                        </ThemedText>
+                      )}
+                    </View>
+                  </View>
+                  {!!job.url && <ExternalLinkRow url={job.url} label="Open" />}
+                </View>
+              ))}
+            </Card>
+          </View>
+        )}
+
+        {actionItems.length > 0 && (
+          <View style={styles.sectionSpacing}>
+            <ThemedText type="title">Action items</ThemedText>
+            <Card>
+              {actionItems.map((item) => (
+                <Checkbox
+                  key={item.id}
+                  label={
+                    contactById.get(item.contactId)
+                      ? `${item.text} — ${contactById.get(item.contactId)!.name}`
+                      : item.text
+                  }
+                  checked={item.done}
+                  onPress={() => toggleActionItem(item)}
+                />
+              ))}
+            </Card>
+          </View>
+        )}
+      </ScrollView>
+      <Toast message={toastMessage} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     padding: Spacing.four,
     gap: Spacing.two,
@@ -228,30 +244,19 @@ const styles = StyleSheet.create({
     marginTop: Spacing.four,
     gap: Spacing.two,
   },
-  aiButton: {
-    backgroundColor: '#3c87f7',
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  aiButtonText: {
-    color: '#ffffff',
-  },
   draftAllButton: {
     marginTop: Spacing.two,
-  },
-  pressed: {
-    opacity: 0.7,
   },
   listRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: Spacing.two,
-    padding: Spacing.two,
-    borderRadius: Spacing.two,
+  },
+  jobMetaRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginLeft: Spacing.four,
   },
   flexShrink: {
     flexShrink: 1,

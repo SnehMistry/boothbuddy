@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import {
   Alert,
@@ -7,15 +8,16 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 
+import { Button } from '@/components/button';
 import { PhotoPicker } from '@/components/photo-picker';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { createContact, processContact } from '@/lib/storage';
 import type { ContactPhoto, PhotoLabel } from '@/lib/types';
@@ -88,7 +90,7 @@ export default function NewContactScreen() {
 
   if (scannerOpen) {
     return (
-      <ThemedView style={styles.flex}>
+      <View style={styles.flex}>
         <CameraView
           style={styles.flex}
           facing="back"
@@ -103,33 +105,35 @@ export default function NewContactScreen() {
           </Pressable>
           <ThemedText style={styles.cameraCancelText}>Point at a QR code</ThemedText>
         </SafeAreaView>
-      </ThemedView>
+      </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.flex}
+      style={[styles.flex, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container}>
-        <ThemedText type="small" themeColor="textSecondary">
-          Notes — e.g. sarah, recruiter, google cloud team, internship apps open oct 15, likes
-          hiking, said email her resume. Use your keyboard&apos;s dictation mic to speak instead
-          of type.
+        <ThemedText type="label" themeColor="textMuted">
+          Notes
+        </ThemedText>
+        <ThemedText type="caption" themeColor="textMuted" style={styles.hint}>
+          e.g. sarah, recruiter, google cloud team, internship apps open oct 15, likes hiking, said
+          email her resume. Use your keyboard&apos;s dictation mic to speak instead of type.
         </ThemedText>
         <TextInput
           value={notes}
           onChangeText={setNotes}
           placeholder="Type or dictate notes about this person or conversation…"
-          placeholderTextColor={theme.textSecondary}
+          placeholderTextColor={theme.textMuted}
           multiline
           style={[
             styles.notesInput,
-            { color: theme.text, backgroundColor: theme.backgroundElement },
+            { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border },
           ]}
         />
 
-        <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
+        <ThemedText type="label" themeColor="textMuted" style={styles.sectionSpacing}>
           Photos — business card, badge, booth, brochure
         </ThemedText>
         <PhotoPicker
@@ -139,49 +143,48 @@ export default function NewContactScreen() {
           onLabelChange={handleLabelChange}
         />
 
-        <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
+        <ThemedText type="label" themeColor="textMuted" style={styles.sectionSpacing}>
           Company URL — scan their QR code or type it
         </ThemedText>
         <Pressable
           onPress={openScanner}
-          style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]}>
-          <ThemedText type="smallBold" style={styles.bigButtonText}>
-            Scan QR Code
-          </ThemedText>
+          style={({ pressed }) => [
+            styles.scanButton,
+            { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+            pressed && styles.pressed,
+          ]}>
+          <Ionicons name="qr-code-outline" size={18} color={theme.text} />
+          <ThemedText type="bodyBold">Scan QR Code</ThemedText>
         </Pressable>
         <TextInput
           value={companyUrl}
           onChangeText={setCompanyUrl}
           placeholder="https://company.com"
-          placeholderTextColor={theme.textSecondary}
+          placeholderTextColor={theme.textMuted}
           autoCapitalize="none"
           keyboardType="url"
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
         />
 
-        <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
+        <ThemedText type="label" themeColor="textMuted" style={styles.sectionSpacing}>
           Name
         </ThemedText>
         <TextInput
           value={name}
           onChangeText={setName}
           placeholder="Their name"
-          placeholderTextColor={theme.textSecondary}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          placeholderTextColor={theme.textMuted}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
         />
 
-        <Pressable
+        <Button
+          label={saving ? 'Saving…' : 'Save Contact'}
           onPress={handleSave}
           disabled={!canSave}
-          style={({ pressed }) => [
-            styles.saveButton,
-            !canSave && styles.saveButtonDisabled,
-            pressed && canSave && styles.pressed,
-          ]}>
-          <ThemedText type="smallBold" style={styles.bigButtonText}>
-            {saving ? 'Saving…' : 'Save Contact'}
-          </ThemedText>
-        </Pressable>
+          loading={saving}
+          icon="checkmark"
+          style={styles.saveButton}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -198,12 +201,12 @@ const styles = StyleSheet.create({
   sectionSpacing: {
     marginTop: Spacing.four,
   },
-  bigButtonText: {
-    color: '#ffffff',
-    fontSize: 17,
+  hint: {
+    marginTop: -Spacing.one,
   },
   notesInput: {
-    borderRadius: Spacing.two,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
     marginTop: Spacing.two,
@@ -212,27 +215,27 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   scanButton: {
-    backgroundColor: '#60646c',
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.three,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
+    paddingVertical: Spacing.three,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     marginBottom: Spacing.two,
   },
   input: {
-    borderRadius: Spacing.two,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     fontSize: 16,
   },
   saveButton: {
-    backgroundColor: '#2f9e44',
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.three,
-    alignItems: 'center',
     marginTop: Spacing.five,
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    paddingVertical: Spacing.three,
   },
   pressed: {
     opacity: 0.7,

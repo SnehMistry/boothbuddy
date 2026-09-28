@@ -1,15 +1,23 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { AiErrorNotice } from '@/components/ai-error-notice';
+import { Badge } from '@/components/badge';
+import { Button } from '@/components/button';
+import { Card } from '@/components/card';
+import { Checkbox } from '@/components/checkbox';
+import { Chip } from '@/components/chip';
+import { ExternalLinkRow } from '@/components/external-link-row';
+import { InterestPicker } from '@/components/interest-picker';
 import { LoadingView } from '@/components/loading-view';
 import { PhotoPicker } from '@/components/photo-picker';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { describeAiError } from '@/lib/ai-errors';
+import { confirmAction } from '@/lib/confirm';
 import {
   addPhotoToContact,
   deleteContact,
@@ -24,15 +32,7 @@ import {
   setResearchMatchStatus,
   updateContact,
 } from '@/lib/storage';
-import {
-  INTEREST_LEVELS,
-  type ActionItem,
-  type Contact,
-  type ContactPhoto,
-  type InterestLevel,
-  type JobOpportunity,
-  type PhotoLabel,
-} from '@/lib/types';
+import type { ActionItem, Contact, ContactPhoto, InterestLevel, JobOpportunity, PhotoLabel } from '@/lib/types';
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -40,12 +40,6 @@ function formatDateTime(iso: string) {
     timeStyle: 'short',
   });
 }
-
-const INTEREST_LABELS: Record<InterestLevel, string> = {
-  hot: '🔥 Hot',
-  warm: '🌤️ Warm',
-  cold: '❄️ Cold',
-};
 
 export default function ContactDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -57,6 +51,7 @@ export default function ContactDetailScreen() {
   const [companyUrl, setCompanyUrl] = useState('');
   const [notes, setNotes] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [researchExpanded, setResearchExpanded] = useState(true);
 
   const loadAll = useCallback(async (contactId: string) => {
     const [found, items, jobList] = await Promise.all([
@@ -184,31 +179,23 @@ export default function ContactDetailScreen() {
     if (updated) setContact(updated);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!contact) return;
     const eventId = contact.eventId;
-    Alert.alert(
+    const confirmed = await confirmAction(
       'Delete this contact?',
       `${contact.name || 'This contact'}, their photos, and any AI research/drafts will be permanently deleted.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteContact(contact);
-              router.replace(`/event/${eventId}`);
-            } catch (error) {
-              Alert.alert(
-                "Couldn't delete contact",
-                error instanceof Error ? error.message : 'Something went wrong. Please try again.',
-              );
-            }
-          },
-        },
-      ],
     );
+    if (!confirmed) return;
+    try {
+      await deleteContact(contact);
+      router.replace(`/event/${eventId}`);
+    } catch (error) {
+      Alert.alert(
+        "Couldn't delete contact",
+        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      );
+    }
   };
 
   if (!contact) return <LoadingView />;
@@ -216,234 +203,225 @@ export default function ContactDetailScreen() {
   const hasCard = contact.aiStatus === 'done';
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <ThemedText type="small" themeColor="textSecondary">
-        Captured {formatDateTime(contact.createdAt)}
-      </ThemedText>
+    <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.container}>
+      <View style={styles.timestampRow}>
+        <Ionicons name="time-outline" size={13} color={theme.textMuted} />
+        <ThemedText type="caption" themeColor="textMuted">
+          Captured {formatDateTime(contact.createdAt)}
+        </ThemedText>
+      </View>
 
-      <ThemedView type="backgroundElement" style={styles.aiStatusBar}>
+      <View
+        style={[
+          styles.statusBar,
+          {
+            backgroundColor:
+              contact.aiStatus === 'error' ? theme.dangerMuted : theme.accentMuted,
+          },
+        ]}>
         {contact.aiStatus === 'processing' ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            ✨ AI is processing this contact — this can take up to a minute on the free tier…
-          </ThemedText>
+          <View style={styles.statusRow}>
+            <Ionicons name="sparkles" size={16} color={theme.accent} />
+            <ThemedText type="body" themeColor="accent" style={styles.flexShrink}>
+              AI is processing this contact — this can take up to a minute on the free tier…
+            </ThemedText>
+          </View>
         ) : contact.aiStatus === 'error' ? (
           <>
             <AiErrorNotice error={contact.aiError} />
-            <Pressable
+            <Button
+              label={processing ? 'Retrying…' : 'Retry'}
               onPress={handleProcess}
               disabled={processing}
-              style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}>
-              <ThemedText type="smallBold" style={styles.aiButtonText}>
-                {processing ? 'Retrying…' : 'Retry'}
-              </ThemedText>
-            </Pressable>
+              loading={processing}
+              icon="refresh"
+            />
           </>
         ) : (
-          <Pressable
+          <Button
+            label={processing ? 'AI busy, retrying…' : hasCard ? 'Reprocess with AI' : 'Process with AI'}
             onPress={handleProcess}
             disabled={processing}
-            style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}>
-            <ThemedText type="smallBold" style={styles.aiButtonText}>
-              {processing
-                ? 'AI busy, retrying…'
-                : hasCard
-                  ? '✨ Reprocess with AI'
-                  : '✨ Process with AI'}
-            </ThemedText>
-          </Pressable>
+            loading={processing}
+            icon="sparkles"
+          />
         )}
-      </ThemedView>
+      </View>
 
       {hasCard && (
-        <ThemedView type="backgroundElement" style={styles.card}>
+        <Card style={styles.aiCard}>
           {(contact.title || contact.company) && (
-            <ThemedText type="smallBold">
+            <ThemedText type="heading">
               {[contact.title, contact.company].filter(Boolean).join(' at ')}
             </ThemedText>
           )}
 
-          <ThemedView style={styles.chipRow}>
-            {INTEREST_LEVELS.map((level) => (
-              <Pressable
-                key={level}
-                onPress={() => setInterestLevel(level)}
-                style={[styles.chip, contact.interestLevel === level && styles.chipSelected]}>
-                <ThemedText type="small">{INTEREST_LABELS[level]}</ThemedText>
-              </Pressable>
-            ))}
-          </ThemedView>
+          <InterestPicker value={contact.interestLevel} onChange={setInterestLevel} />
 
-          {!!contact.summary && <ThemedText type="small">{contact.summary}</ThemedText>}
+          {!!contact.summary && <ThemedText type="body">{contact.summary}</ThemedText>}
 
           {!!contact.topics?.length && (
-            <ThemedView style={styles.chipRow}>
+            <View style={styles.chipRow}>
               {contact.topics.map((topic) => (
-                <ThemedView key={topic} type="backgroundSelected" style={styles.tagChip}>
-                  <ThemedText type="small">{topic}</ThemedText>
-                </ThemedView>
+                <Chip key={topic} label={topic} />
               ))}
-            </ThemedView>
+            </View>
           )}
 
           {!!contact.rolesMentioned?.length && (
-            <ThemedView style={styles.cardSection}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Roles / opportunities mentioned
-              </ThemedText>
+            <View style={styles.cardSection}>
+              <View style={styles.sectionLabelRow}>
+                <Ionicons name="briefcase-outline" size={14} color={theme.textMuted} />
+                <ThemedText type="label" themeColor="textMuted">
+                  Roles / opportunities mentioned
+                </ThemedText>
+              </View>
               {contact.rolesMentioned.map((role, i) => (
-                <ThemedText key={i} type="small">
+                <ThemedText key={i} type="body">
                   • {role}
                 </ThemedText>
               ))}
-            </ThemedView>
+            </View>
           )}
 
           {!!contact.deadlines?.length && (
-            <ThemedView style={styles.cardSection}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Deadlines mentioned
-              </ThemedText>
-              {contact.deadlines.map((deadline, i) => (
-                <ThemedText key={i} type="small">
-                  • {deadline}
+            <View style={styles.cardSection}>
+              <View style={styles.sectionLabelRow}>
+                <Ionicons name="time-outline" size={14} color={theme.textMuted} />
+                <ThemedText type="label" themeColor="textMuted">
+                  Deadlines mentioned
                 </ThemedText>
-              ))}
-            </ThemedView>
+              </View>
+              <View style={styles.chipRow}>
+                {contact.deadlines.map((deadline, i) => (
+                  <Badge key={i} label={deadline} tone="warning" />
+                ))}
+              </View>
+            </View>
           )}
 
           {!!contact.memorable && (
-            <ThemedView style={styles.cardSection}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Memorable
-              </ThemedText>
-              <ThemedText type="small">{contact.memorable}</ThemedText>
-            </ThemedView>
+            <View style={styles.cardSection}>
+              <View style={styles.sectionLabelRow}>
+                <Ionicons name="heart-outline" size={14} color={theme.textMuted} />
+                <ThemedText type="label" themeColor="textMuted">
+                  Memorable
+                </ThemedText>
+              </View>
+              <ThemedText type="body">{contact.memorable}</ThemedText>
+            </View>
           )}
 
-          {!!contact.email && (
-            <Pressable onPress={() => Linking.openURL(`mailto:${contact.email}`)}>
-              <ThemedText type="linkPrimary">{contact.email}</ThemedText>
-            </Pressable>
-          )}
-          {!!contact.linkedinUrl && (
-            <Pressable onPress={() => Linking.openURL(contact.linkedinUrl!)}>
-              <ThemedText type="linkPrimary">{contact.linkedinUrl}</ThemedText>
-            </Pressable>
-          )}
-        </ThemedView>
+          {!!contact.email && <ExternalLinkRow url={`mailto:${contact.email}`} label={contact.email} />}
+          {!!contact.linkedinUrl && <ExternalLinkRow url={contact.linkedinUrl} />}
+        </Card>
       )}
 
       {!!actionItems.length && (
-        <ThemedView style={styles.cardSection}>
-          <ThemedText type="small" themeColor="textSecondary">
-            Action items
-          </ThemedText>
-          {actionItems.map((item) => (
-            <Pressable key={item.id} onPress={() => toggleActionItem(item)}>
-              <ThemedText type="small">
-                {item.done ? '☑' : '☐'} {item.text}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </ThemedView>
+        <View style={styles.sectionSpacing}>
+          <ThemedText type="title">Action items</ThemedText>
+          <Card>
+            {actionItems.map((item) => (
+              <Checkbox key={item.id} label={item.text} checked={item.done} onPress={() => toggleActionItem(item)} />
+            ))}
+          </Card>
+        </View>
       )}
 
       {!!jobs.length && (
-        <ThemedView style={styles.cardSection}>
-          <ThemedText type="small" themeColor="textSecondary">
-            Jobs found
-          </ThemedText>
-          {jobs.map((job) => (
-            <ThemedView key={job.id} style={styles.jobRow}>
-              <Pressable onPress={() => toggleJobApplied(job)} style={styles.flexShrink}>
-                <ThemedText type="small">
-                  {job.applied ? '☑' : '☐'} {job.title}
-                  {job.deadline ? ` — due ${job.deadline}` : ''}
-                </ThemedText>
-              </Pressable>
-              {!!job.url && (
-                <Pressable onPress={() => Linking.openURL(job.url!)}>
-                  <ThemedText type="link" themeColor="textSecondary">
-                    Open
-                  </ThemedText>
-                </Pressable>
-              )}
-            </ThemedView>
-          ))}
-        </ThemedView>
+        <View style={styles.sectionSpacing}>
+          <ThemedText type="title">Jobs found</ThemedText>
+          <Card>
+            {jobs.map((job) => (
+              <View key={job.id} style={styles.jobRow}>
+                <View style={styles.flexShrink}>
+                  <Checkbox label={job.title} checked={job.applied} onPress={() => toggleJobApplied(job)} />
+                  {!!job.deadline && (
+                    <View style={styles.jobDeadline}>
+                      <Badge label={`Due ${job.deadline}`} tone="warning" />
+                    </View>
+                  )}
+                </View>
+                {!!job.url && <ExternalLinkRow url={job.url} label="Open" />}
+              </View>
+            ))}
+          </Card>
+        </View>
       )}
 
       {!!contact.research && (
-        <ThemedView type="backgroundElement" style={styles.card}>
-          <ThemedText type="smallBold">
-            Research —{' '}
-            {contact.research.grounded
-              ? 'live-searched'
-              : "not live-searched, AI's own knowledge only"}
-          </ThemedText>
+        <Card style={styles.researchCard}>
+          <Pressable
+            onPress={() => setResearchExpanded((v) => !v)}
+            style={styles.researchHeader}>
+            <ThemedText type="heading">Research</ThemedText>
+            <View style={styles.researchHeaderRight}>
+              <Badge
+                label={contact.research.grounded ? 'Live-searched' : "AI's knowledge only"}
+                tone={contact.research.grounded ? 'success' : 'neutral'}
+              />
+              <Ionicons
+                name={researchExpanded ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={theme.textMuted}
+              />
+            </View>
+          </Pressable>
 
-          {!!contact.research.person.summary && (
-            <ThemedView style={styles.cardSection}>
-              <ThemedText type="small" themeColor="textSecondary">
-                About {contact.name} —{' '}
-                {contact.research.person.confidence === 'high'
-                  ? 'high confidence match'
-                  : 'low confidence, could be the wrong person'}
-              </ThemedText>
-              <ThemedText type="small">{contact.research.person.summary}</ThemedText>
-            </ThemedView>
-          )}
+          {researchExpanded && (
+            <>
+              {!!contact.research.person.summary && (
+                <View style={styles.cardSection}>
+                  <View style={styles.sectionLabelRow}>
+                    <ThemedText type="label" themeColor="textMuted">
+                      About {contact.name}
+                    </ThemedText>
+                    <Badge
+                      label={contact.research.person.confidence === 'high' ? 'High confidence' : 'Low confidence'}
+                      tone={contact.research.person.confidence === 'high' ? 'success' : 'warning'}
+                    />
+                  </View>
+                  <ThemedText type="body">{contact.research.person.summary}</ThemedText>
+                </View>
+              )}
 
-          {!!contact.research.company.summary && (
-            <ThemedView style={styles.cardSection}>
-              <ThemedText type="small" themeColor="textSecondary">
-                About the company
-              </ThemedText>
-              <ThemedText type="small">{contact.research.company.summary}</ThemedText>
-            </ThemedView>
-          )}
-
-          {!!contact.research.sources.length && (
-            <ThemedView style={styles.cardSection}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Sources
-              </ThemedText>
-              {contact.research.sources.map((source) => (
-                <Pressable key={source.url} onPress={() => Linking.openURL(source.url)}>
-                  <ThemedText type="link" themeColor="textSecondary">
-                    {source.title || source.url}
+              {!!contact.research.company.summary && (
+                <View style={styles.cardSection}>
+                  <ThemedText type="label" themeColor="textMuted">
+                    About the company
                   </ThemedText>
-                </Pressable>
-              ))}
-            </ThemedView>
-          )}
+                  <ThemedText type="body">{contact.research.company.summary}</ThemedText>
+                </View>
+              )}
 
-          {contact.research.matchStatus === 'unconfirmed' ? (
-            <ThemedView style={styles.chipRow}>
-              <Pressable
-                onPress={() => handleMatchStatus('confirmed')}
-                style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}>
-                <ThemedText type="smallBold" style={styles.aiButtonText}>
-                  ✓ This is them
-                </ThemedText>
-              </Pressable>
-              <Pressable
-                onPress={() => handleMatchStatus('rejected')}
-                style={({ pressed }) => [styles.rejectButton, pressed && styles.pressed]}>
-                <ThemedText type="smallBold">✗ Wrong person</ThemedText>
-              </Pressable>
-            </ThemedView>
-          ) : (
-            <ThemedText type="small" themeColor="textSecondary">
-              {contact.research.matchStatus === 'confirmed'
-                ? '✓ Match confirmed'
-                : '✗ Match rejected'}
-            </ThemedText>
+              {!!contact.research.sources.length && (
+                <View style={styles.cardSection}>
+                  <ThemedText type="label" themeColor="textMuted">
+                    Sources
+                  </ThemedText>
+                  {contact.research.sources.map((source) => (
+                    <ExternalLinkRow key={source.url} url={source.url} label={source.title || undefined} />
+                  ))}
+                </View>
+              )}
+
+              {contact.research.matchStatus === 'unconfirmed' ? (
+                <View style={styles.chipRow}>
+                  <Button label="This is them" icon="checkmark" onPress={() => handleMatchStatus('confirmed')} />
+                  <Button label="Wrong person" variant="secondary" onPress={() => handleMatchStatus('rejected')} />
+                </View>
+              ) : (
+                <Badge
+                  label={contact.research.matchStatus === 'confirmed' ? 'Match confirmed' : 'Match rejected'}
+                  tone={contact.research.matchStatus === 'confirmed' ? 'success' : 'neutral'}
+                />
+              )}
+            </>
           )}
-        </ThemedView>
+        </Card>
       )}
 
-      <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
+      <ThemedText type="label" themeColor="textMuted" style={styles.sectionSpacing}>
         Name
       </ThemedText>
       <TextInput
@@ -451,11 +429,11 @@ export default function ContactDetailScreen() {
         onChangeText={setName}
         onBlur={saveName}
         placeholder="Their name"
-        placeholderTextColor={theme.textSecondary}
-        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        placeholderTextColor={theme.textMuted}
+        style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
       />
 
-      <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
+      <ThemedText type="label" themeColor="textMuted" style={styles.sectionSpacing}>
         Photos
       </ThemedText>
       <PhotoPicker
@@ -465,7 +443,7 @@ export default function ContactDetailScreen() {
         onLabelChange={handleLabelChange}
       />
 
-      <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
+      <ThemedText type="label" themeColor="textMuted" style={styles.sectionSpacing}>
         Notes
       </ThemedText>
       <TextInput
@@ -473,15 +451,15 @@ export default function ContactDetailScreen() {
         onChangeText={setNotes}
         onBlur={saveNotes}
         placeholder="Type quick notes about this person or conversation…"
-        placeholderTextColor={theme.textSecondary}
+        placeholderTextColor={theme.textMuted}
         multiline
         style={[
           styles.notesInput,
-          { color: theme.text, backgroundColor: theme.backgroundElement },
+          { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border },
         ]}
       />
 
-      <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSpacing}>
+      <ThemedText type="label" themeColor="textMuted" style={styles.sectionSpacing}>
         Company URL
       </ThemedText>
       <TextInput
@@ -489,24 +467,24 @@ export default function ContactDetailScreen() {
         onChangeText={setCompanyUrl}
         onBlur={saveCompanyUrl}
         placeholder="https://company.com"
-        placeholderTextColor={theme.textSecondary}
+        placeholderTextColor={theme.textMuted}
         autoCapitalize="none"
         keyboardType="url"
-        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
       />
       {!!contact.companyUrl && (
-        <Pressable onPress={() => Linking.openURL(contact.companyUrl!)}>
-          <ThemedText type="linkPrimary">Open {contact.companyUrl}</ThemedText>
-        </Pressable>
+        <View style={styles.companyLinkRow}>
+          <ExternalLinkRow url={contact.companyUrl} />
+        </View>
       )}
 
-      <Pressable
+      <Button
+        label="Delete Contact"
+        variant="danger"
+        icon="trash-outline"
         onPress={handleDelete}
-        style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}>
-        <ThemedText type="smallBold" style={styles.deleteButtonText}>
-          Delete Contact
-        </ThemedText>
-      </Pressable>
+        style={styles.deleteButton}
+      />
     </ScrollView>
   );
 }
@@ -515,93 +493,68 @@ const styles = StyleSheet.create({
   container: {
     padding: Spacing.four,
     gap: Spacing.one,
+    maxWidth: 640,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  timestampRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   sectionSpacing: {
     marginTop: Spacing.four,
   },
   input: {
-    borderRadius: Spacing.two,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     fontSize: 16,
   },
   notesInput: {
-    borderRadius: Spacing.two,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
     fontSize: 16,
     minHeight: 100,
     textAlignVertical: 'top',
   },
-  aiStatusBar: {
+  statusBar: {
     marginTop: Spacing.three,
     padding: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.large,
     gap: Spacing.two,
   },
-  aiButton: {
-    backgroundColor: '#3c87f7',
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+  statusRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
+    gap: Spacing.two,
   },
-  aiButtonText: {
-    color: '#ffffff',
-  },
-  rejectButton: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
-    borderWidth: 1,
-    borderColor: '#60646c',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  pressed: {
-    opacity: 0.7,
+  companyLinkRow: {
+    marginTop: Spacing.one,
   },
   deleteButton: {
     marginTop: Spacing.six,
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.three,
-    borderWidth: 1,
-    borderColor: '#e0483e',
-    alignItems: 'center',
+    alignSelf: 'flex-start',
   },
-  deleteButtonText: {
-    color: '#e0483e',
-  },
-  card: {
+  aiCard: {
     marginTop: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.two,
   },
   cardSection: {
     gap: Spacing.half,
+  },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.one,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
-  },
-  chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.five,
-    borderWidth: 1,
-    borderColor: '#60646c55',
-  },
-  chipSelected: {
-    borderColor: '#3c87f7',
-    borderWidth: 2,
-  },
-  tagChip: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.half,
-    borderRadius: Spacing.five,
   },
   jobRow: {
     flexDirection: 'row',
@@ -609,7 +562,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
+  jobDeadline: {
+    marginLeft: Spacing.four,
+    marginTop: 2,
+  },
   flexShrink: {
     flexShrink: 1,
+  },
+  researchCard: {
+    marginTop: Spacing.three,
+  },
+  researchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  researchHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
 });

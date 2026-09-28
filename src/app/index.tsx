@@ -1,84 +1,119 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 
+import { Card } from '@/components/card';
+import { ChangePasswordModal } from '@/components/change-password-modal';
+import { SkeletonList } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
-import { getEvents } from '@/lib/storage';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { confirmAction } from '@/lib/confirm';
+import { getEventsWithStats, type EventWithStats } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
-import type { BoothEvent } from '@/lib/types';
 
 export default function EventsScreen() {
   const navigation = useNavigation();
-  const [events, setEvents] = useState<BoothEvent[]>([]);
+  const theme = useTheme();
+  const [events, setEvents] = useState<EventWithStats[] | null>(null);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      getEvents().then(setEvents);
+      getEventsWithStats().then(setEvents);
     }, []),
   );
 
-  const handleSignOut = () => {
-    Alert.alert('Sign out?', undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => supabase.auth.signOut() },
-    ]);
+  const handleSignOut = async () => {
+    const confirmed = await confirmAction('Sign out?');
+    if (confirmed) supabase.auth.signOut();
   };
 
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <Pressable onPress={handleSignOut} hitSlop={8}>
-          <ThemedText type="small" themeColor="textSecondary">
-            Sign Out
-          </ThemedText>
-        </Pressable>
+        <View style={styles.headerButtons}>
+          <Pressable
+            onPress={() => setChangingPassword(true)}
+            hitSlop={8}
+            accessibilityLabel="Change password">
+            <Ionicons name="key-outline" size={20} color={theme.textMuted} />
+          </Pressable>
+          <Pressable onPress={handleSignOut} hitSlop={8} accessibilityLabel="Sign out">
+            <Ionicons name="log-out-outline" size={20} color={theme.textMuted} />
+          </Pressable>
+        </View>
       ),
     });
-  }, [navigation]);
+  }, [navigation, theme]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      {events.length === 0 ? (
-        <ThemedView style={styles.emptyState}>
-          <ThemedText type="subtitle" style={styles.centerText}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['bottom']}>
+      {events === null ? (
+        <SkeletonList />
+      ) : events.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="calendar-outline" size={40} color={theme.textMuted} />
+          <ThemedText type="heading" style={styles.centerText}>
             No events yet
           </ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.centerText}>
+          <ThemedText type="body" themeColor="textMuted" style={styles.centerText}>
             Create an event for the career fair or networking session you&apos;re attending, then
             capture a contact for every person you meet.
           </ThemedText>
-        </ThemedView>
+        </View>
       ) : (
         <FlatList
           data={events}
           keyExtractor={(event) => event.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <Pressable
-              onPress={() => router.push(`/event/${item.id}`)}
-              style={({ pressed }) => [styles.eventCard, pressed && styles.pressed]}>
-              <ThemedView type="backgroundElement" style={styles.eventCardInner}>
-                <ThemedText type="smallBold">{item.name}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
+            <Card onPress={() => router.push(`/event/${item.id}`)}>
+              <ThemedText type="heading">{item.name}</ThemedText>
+              <View style={styles.metaRow}>
+                <Ionicons name="calendar-outline" size={13} color={theme.textMuted} />
+                <ThemedText type="caption" themeColor="textMuted">
                   {item.date}
                   {item.location ? ` · ${item.location}` : ''}
                 </ThemedText>
-              </ThemedView>
-            </Pressable>
+              </View>
+              <View style={styles.statsRow}>
+                <View style={[styles.statChip, { backgroundColor: theme.surfaceMuted }]}>
+                  <Ionicons name="people-outline" size={13} color={theme.textMuted} />
+                  <ThemedText type="caption" themeColor="textMuted">
+                    {item.contactCount} {item.contactCount === 1 ? 'contact' : 'contacts'}
+                  </ThemedText>
+                </View>
+                {item.pendingFollowups > 0 && (
+                  <View style={[styles.statChip, { backgroundColor: theme.warningMuted }]}>
+                    <Ionicons name="mail-unread-outline" size={13} color={theme.warning} />
+                    <ThemedText type="caption" themeColor="warning">
+                      {item.pendingFollowups} pending
+                    </ThemedText>
+                  </View>
+                )}
+              </View>
+            </Card>
           )}
         />
       )}
 
       <Pressable
         onPress={() => router.push('/new-event')}
-        style={({ pressed }) => [styles.newEventButton, pressed && styles.pressed]}>
-        <ThemedText type="smallBold" style={styles.newEventButtonText}>
-          + New Event
+        style={({ pressed }) => [
+          styles.newEventButton,
+          { backgroundColor: theme.accent },
+          pressed && styles.pressed,
+        ]}>
+        <Ionicons name="add" size={20} color="#ffffff" />
+        <ThemedText type="bodyBold" style={styles.newEventButtonText}>
+          New Event
         </ThemedText>
       </Pressable>
+
+      <ChangePasswordModal visible={changingPassword} onClose={() => setChangingPassword(false)} />
     </SafeAreaView>
   );
 }
@@ -86,6 +121,10 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: Spacing.four,
   },
   emptyState: {
     flex: 1,
@@ -101,26 +140,40 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     gap: Spacing.two,
   },
-  eventCard: {
-    borderRadius: Spacing.three,
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
   },
-  eventCardInner: {
-    borderRadius: Spacing.three,
-    padding: Spacing.three,
-    gap: Spacing.half,
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
   },
-  pressed: {
-    opacity: 0.7,
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+    backgroundColor: 'transparent',
   },
   newEventButton: {
-    backgroundColor: '#3c87f7',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
     marginHorizontal: Spacing.three,
     marginBottom: Spacing.three,
     paddingVertical: Spacing.three,
-    borderRadius: Spacing.three,
-    alignItems: 'center',
+    borderRadius: Radius.large,
+  },
+  pressed: {
+    opacity: 0.85,
   },
   newEventButtonText: {
     color: '#ffffff',
+    fontSize: 17,
   },
 });

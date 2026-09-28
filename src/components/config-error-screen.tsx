@@ -1,22 +1,27 @@
-import { ScrollView, StyleSheet } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 // Shown instead of the app when required config (currently: the Supabase
 // URL/key) is missing, so a misconfigured build fails loudly with a
 // readable message instead of crashing on launch before React renders
 // anything — see src/lib/supabase.ts's supabaseConfigError.
 export function ConfigErrorScreen({ message }: { message: string }) {
+  const theme = useTheme();
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <ThemedView style={styles.card}>
-        <ThemedText type="subtitle">⚠️ Configuration error</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
+    <ScrollView
+      style={{ backgroundColor: theme.background }}
+      contentContainerStyle={styles.container}>
+      <View style={styles.card}>
+        <Ionicons name="warning" size={32} color={theme.danger} />
+        <ThemedText type="title">Configuration error</ThemedText>
+        <ThemedText type="body" themeColor="textMuted">
           {message}
         </ThemedText>
-      </ThemedView>
+      </View>
     </ScrollView>
   );
 }
@@ -31,5 +36,6 @@ const styles = StyleSheet.create({
   card: {
     gap: Spacing.two,
     maxWidth: 480,
+    alignItems: 'center',
   },
 });

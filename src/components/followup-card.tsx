@@ -1,9 +1,13 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 
+import { Badge } from '@/components/badge';
+import { Button } from '@/components/button';
+import { Chip } from '@/components/chip';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { FOLLOWUP_TONES, type Contact, type FollowupStatus, type FollowupTone } from '@/lib/types';
 
 const STATUS_LABELS: Record<FollowupStatus, string> = {
@@ -65,25 +69,63 @@ function openInGmail(contact: Contact) {
   if (!opened) window.location.href = mailtoUrl(contact);
 }
 
+const STATUS_TONE: Record<FollowupStatus, 'neutral' | 'success'> = {
+  not_sent: 'neutral',
+  sent: 'success',
+  replied: 'success',
+};
+
+function DraftField({
+  label,
+  text,
+  limit,
+  onCopy,
+}: {
+  label: string;
+  text: string;
+  limit?: number;
+  onCopy: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={styles.field}>
+      <View style={styles.fieldHeader}>
+        <ThemedText type="label" themeColor="textMuted">
+          {label}
+          {limit ? ` · ${text.length}/${limit}` : ''}
+        </ThemedText>
+        <Pressable onPress={onCopy} style={styles.copyButton} hitSlop={6}>
+          <Ionicons name="copy-outline" size={14} color={theme.accent} />
+          <ThemedText type="link" themeColor="accent">
+            Copy
+          </ThemedText>
+        </Pressable>
+      </View>
+      <View style={[styles.textArea, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
+        <ThemedText type="body">{text}</ThemedText>
+      </View>
+    </View>
+  );
+}
+
 // Per-contact follow-up drafting UI (Phase 4): tone picker, the three
-// drafts with Copy, Regenerate, Open LinkedIn, and a sent-status control.
-// Shared between the mobile End-of-Day screen and the web dashboard's
-// contact/draft side panel.
+// drafts as read-only "text areas" with Copy, Regenerate, Open LinkedIn /
+// Open in Gmail, and a sent-status control. Shared between the mobile
+// End-of-Day screen and the web dashboard's contact/draft side panel.
 export function FollowupCard({
   contact,
   generating,
-  copiedKey,
   onCopy,
   onRegenerate,
   onStatusChange,
 }: {
   contact: Contact;
   generating: boolean;
-  copiedKey: string | null;
-  onCopy: (key: string, text: string) => void;
+  onCopy: (text: string) => void;
   onRegenerate: (contact: Contact, tone: FollowupTone) => void;
   onStatusChange: (contact: Contact, status: FollowupStatus) => void;
 }) {
+  const theme = useTheme();
   const [tone, setTone] = useState<FollowupTone>(contact.followupTone);
   // Pick up the tone actually used once a generation completes (it may
   // differ from what's locally selected if a bulk "Draft All" run used the
@@ -98,169 +140,137 @@ export function FollowupCard({
   const hasDraft = !!contact.linkedinNote;
 
   return (
-    <ThemedView type="backgroundElement" style={styles.card}>
-      <ThemedText type="smallBold">
-        {contact.name}
-        {contact.company ? ` — ${contact.company}` : ''}
-      </ThemedText>
+    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <View style={styles.headerRow}>
+        <ThemedText type="heading">
+          {contact.name}
+          {contact.company ? ` · ${contact.company}` : ''}
+        </ThemedText>
+        <Badge label={STATUS_LABELS[contact.followupStatus]} tone={STATUS_TONE[contact.followupStatus]} />
+      </View>
 
-      <ThemedView style={styles.chipRow}>
+      <View style={styles.chipRow}>
         {FOLLOWUP_TONES.map((t) => (
-          <Pressable
-            key={t}
-            onPress={() => setTone(t)}
-            style={[styles.chip, tone === t && styles.chipSelected]}>
-            <ThemedText type="small">{TONE_LABELS[t]}</ThemedText>
-          </Pressable>
+          <Chip key={t} label={TONE_LABELS[t]} selected={tone === t} onPress={() => setTone(t)} />
         ))}
-      </ThemedView>
+      </View>
 
       {hasDraft ? (
         <>
-          <ThemedView style={styles.draftBlock}>
-            <ThemedText type="small" themeColor="textSecondary">
-              LinkedIn connection note ({contact.linkedinNote!.length}/300)
-            </ThemedText>
-            <ThemedText type="small">{contact.linkedinNote}</ThemedText>
-            <Pressable onPress={() => onCopy(`${contact.id}:note`, contact.linkedinNote!)}>
-              <ThemedText type="link" themeColor="textSecondary">
-                {copiedKey === `${contact.id}:note` ? 'Copied ✓' : 'Copy'}
-              </ThemedText>
-            </Pressable>
-          </ThemedView>
-
-          <ThemedView style={styles.draftBlock}>
-            <ThemedText type="small" themeColor="textSecondary">
-              Follow-up message
-            </ThemedText>
-            <ThemedText type="small">{contact.linkedinMessage}</ThemedText>
-            <Pressable onPress={() => onCopy(`${contact.id}:message`, contact.linkedinMessage!)}>
-              <ThemedText type="link" themeColor="textSecondary">
-                {copiedKey === `${contact.id}:message` ? 'Copied ✓' : 'Copy'}
-              </ThemedText>
-            </Pressable>
-          </ThemedView>
-
+          <DraftField
+            label="LinkedIn connection note"
+            text={contact.linkedinNote!}
+            limit={300}
+            onCopy={() => onCopy(contact.linkedinNote!)}
+          />
+          <DraftField
+            label="Follow-up message"
+            text={contact.linkedinMessage!}
+            onCopy={() => onCopy(contact.linkedinMessage!)}
+          />
           {!!contact.emailDraft && (
-            <ThemedView style={styles.draftBlock}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Email draft
-              </ThemedText>
-              {!!contact.emailSubject && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  Subject: {contact.emailSubject}
-                </ThemedText>
-              )}
-              <ThemedText type="small">{contact.emailDraft}</ThemedText>
-              <ThemedView style={styles.emailActionRow}>
-                <Pressable
-                  onPress={() =>
-                    onCopy(
-                      `${contact.id}:email`,
-                      contact.emailSubject
-                        ? `Subject: ${contact.emailSubject}\n\n${contact.emailDraft}`
-                        : contact.emailDraft!,
-                    )
-                  }>
-                  <ThemedText type="link" themeColor="textSecondary">
-                    {copiedKey === `${contact.id}:email` ? 'Copied ✓' : 'Copy'}
-                  </ThemedText>
-                </Pressable>
-                {Platform.OS === 'web' && !!contact.email && (
-                  <Pressable onPress={() => openInGmail(contact)}>
-                    <ThemedText type="link" themeColor="textSecondary">
-                      Open in Gmail
-                    </ThemedText>
-                  </Pressable>
-                )}
-              </ThemedView>
-            </ThemedView>
+            <DraftField
+              label={contact.emailSubject ? `Email · ${contact.emailSubject}` : 'Email draft'}
+              text={contact.emailDraft}
+              onCopy={() =>
+                onCopy(
+                  contact.emailSubject
+                    ? `Subject: ${contact.emailSubject}\n\n${contact.emailDraft}`
+                    : contact.emailDraft!,
+                )
+              }
+            />
           )}
         </>
       ) : (
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="body" themeColor="textMuted">
           No draft yet.
         </ThemedText>
       )}
 
-      <ThemedView style={styles.actionRow}>
-        <Pressable
+      <View style={styles.actionRow}>
+        <Button
+          label={generating ? 'Drafting…' : hasDraft ? 'Regenerate' : 'Draft with AI'}
+          icon="sparkles"
+          variant="primary"
+          loading={generating}
           onPress={() => onRegenerate(contact, tone)}
-          disabled={generating}
-          style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}>
-          <ThemedText type="smallBold" style={styles.aiButtonText}>
-            {generating ? 'Drafting…' : hasDraft ? 'Regenerate' : 'Draft with AI'}
-          </ThemedText>
-        </Pressable>
-        <Pressable onPress={() => openExternalLink(linkedInUrlFor(contact))}>
-          <ThemedText type="link" themeColor="textSecondary">
+        />
+        <Pressable onPress={() => openExternalLink(linkedInUrlFor(contact))} style={styles.linkAction}>
+          <Ionicons name="logo-linkedin" size={16} color={theme.accent} />
+          <ThemedText type="link" themeColor="accent">
             Open LinkedIn
           </ThemedText>
         </Pressable>
-      </ThemedView>
-
-      <ThemedView style={styles.chipRow}>
-        {(Object.keys(STATUS_LABELS) as FollowupStatus[]).map((status) => (
-          <Pressable
-            key={status}
-            onPress={() => onStatusChange(contact, status)}
-            style={[styles.chip, contact.followupStatus === status && styles.chipSelected]}>
-            <ThemedText type="small">{STATUS_LABELS[status]}</ThemedText>
+        {Platform.OS === 'web' && !!contact.email && !!contact.emailDraft && (
+          <Pressable onPress={() => openInGmail(contact)} style={styles.linkAction}>
+            <Ionicons name="mail-outline" size={16} color={theme.accent} />
+            <ThemedText type="link" themeColor="accent">
+              Open in Gmail
+            </ThemedText>
           </Pressable>
+        )}
+      </View>
+
+      <View style={styles.chipRow}>
+        {(Object.keys(STATUS_LABELS) as FollowupStatus[]).map((status) => (
+          <Chip
+            key={status}
+            label={STATUS_LABELS[status]}
+            selected={contact.followupStatus === status}
+            onPress={() => onStatusChange(contact, status)}
+          />
         ))}
-      </ThemedView>
-    </ThemedView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     padding: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.large,
+    borderWidth: 1,
+    gap: Spacing.three,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: Spacing.two,
   },
-  draftBlock: {
-    gap: Spacing.half,
+  field: {
+    gap: Spacing.one,
   },
-  emailActionRow: {
+  fieldHeader: {
     flexDirection: 'row',
-    gap: Spacing.three,
-    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  textArea: {
+    borderRadius: Radius.medium,
+    borderWidth: 1,
+    padding: Spacing.two + 2,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
   },
-  chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.five,
-    borderWidth: 1,
-    borderColor: '#60646c55',
-  },
-  chipSelected: {
-    borderColor: '#3c87f7',
-    borderWidth: 2,
-  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-    backgroundColor: 'transparent',
+    flexWrap: 'wrap',
+    gap: Spacing.four,
   },
-  aiButton: {
-    backgroundColor: '#3c87f7',
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+  linkAction: {
+    flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  aiButtonText: {
-    color: '#ffffff',
-  },
-  pressed: {
-    opacity: 0.7,
+    gap: 4,
   },
 });

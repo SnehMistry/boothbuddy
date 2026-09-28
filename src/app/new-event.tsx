@@ -1,16 +1,10 @@
 import { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 
+import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { createEvent } from '@/lib/storage';
 
@@ -40,10 +34,10 @@ export default function NewEventScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.flex}
+      style={[styles.flex, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container}>
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="label" themeColor="textMuted">
           Event name
         </ThemedText>
         <TextInput
@@ -51,44 +45,41 @@ export default function NewEventScreen() {
           value={name}
           onChangeText={setName}
           placeholder="e.g. UCSD Career Fair"
-          placeholderTextColor={theme.textSecondary}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          placeholderTextColor={theme.textMuted}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
         />
 
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="label" themeColor="textMuted" style={styles.fieldSpacing}>
           Date
         </ThemedText>
         <TextInput
           value={date}
           onChangeText={setDate}
           placeholder="YYYY-MM-DD"
-          placeholderTextColor={theme.textSecondary}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          placeholderTextColor={theme.textMuted}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
         />
 
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="label" themeColor="textMuted" style={styles.fieldSpacing}>
           Location (optional)
         </ThemedText>
         <TextInput
           value={location}
           onChangeText={setLocation}
           placeholder="e.g. RIMAC Arena"
-          placeholderTextColor={theme.textSecondary}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          placeholderTextColor={theme.textMuted}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
         />
 
-        <Pressable
-          onPress={handleSave}
-          disabled={!canSave}
-          style={({ pressed }) => [
-            styles.saveButton,
-            !canSave && styles.saveButtonDisabled,
-            pressed && canSave && styles.pressed,
-          ]}>
-          <ThemedText type="smallBold" style={styles.saveButtonText}>
-            {saving ? 'Saving…' : 'Create Event'}
-          </ThemedText>
-        </Pressable>
+        <View style={styles.buttonRow}>
+          <Button
+            label={saving ? 'Saving…' : 'Create Event'}
+            onPress={handleSave}
+            disabled={!canSave}
+            loading={saving}
+            style={styles.saveButton}
+          />
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -100,29 +91,23 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: Spacing.four,
-    gap: Spacing.two,
+  },
+  fieldSpacing: {
+    marginTop: Spacing.three,
   },
   input: {
-    borderRadius: Spacing.two,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    paddingVertical: Spacing.three,
     fontSize: 16,
-    marginBottom: Spacing.three,
+    marginTop: Spacing.one,
+  },
+  buttonRow: {
+    marginTop: Spacing.five,
   },
   saveButton: {
-    backgroundColor: '#3c87f7',
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.three,
-    alignItems: 'center',
-    marginTop: Spacing.two,
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    color: '#ffffff',
-  },
-  pressed: {
-    opacity: 0.7,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
   },
 });

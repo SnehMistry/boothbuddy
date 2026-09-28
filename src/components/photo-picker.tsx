@@ -1,11 +1,14 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  View,
   type StyleProp,
   type ImageStyle,
 } from 'react-native';
@@ -15,10 +18,11 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Crypto from 'expo-crypto';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { confirmAction } from '@/lib/confirm';
 import { deleteStorageFile, extensionFromUri, getSignedUrl, uploadCapturedFile } from '@/lib/files';
 import { PHOTO_LABELS, PHOTO_LABEL_TITLES, type ContactPhoto, type PhotoLabel } from '@/lib/types';
+import { useTheme } from '@/hooks/use-theme';
 
 type PhotoPickerProps = {
   photos: ContactPhoto[];
@@ -42,6 +46,7 @@ function PhotoImage({
   style: StyleProp<ImageStyle>;
   resizeMode?: 'cover' | 'contain';
 }) {
+  const theme = useTheme();
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,11 +63,12 @@ function PhotoImage({
   }, [photo.storagePath, localPreviewUri]);
 
   const uri = localPreviewUri ?? signedUrl;
-  if (!uri) return <ThemedView type="backgroundElement" style={style} />;
+  if (!uri) return <View style={[{ backgroundColor: theme.surfaceMuted }, style]} />;
   return <Image source={{ uri }} style={style} resizeMode={resizeMode} />;
 }
 
 export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPickerProps) {
+  const theme = useTheme();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null);
@@ -97,7 +103,7 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
   };
 
   const pickFromLibrary = async () => {
-    if (!libraryPermission?.granted) {
+    if (Platform.OS !== 'web' && !libraryPermission?.granted) {
       const result = await requestLibraryPermission();
       if (!result.granted) {
         Alert.alert('Photo library access needed', 'Enable photo library access to add a photo.');
@@ -108,7 +114,7 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.7,
-      allowsMultipleSelection: true,
+      allowsMultipleSelection: Platform.OS !== 'web',
     });
     if (result.canceled) return;
 
@@ -145,7 +151,16 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
     }
   };
 
+  // A 3-option Alert.alert (Take Photo / Choose from Library / Cancel) is a
+  // no-op on web (react-native-web only handles the 1- and 2-button
+  // cases) — and a live camera capture flow doesn't fit a browser well
+  // anyway, so web skips straight to the file picker, which is the
+  // standard way to attach a photo on the web.
   const handleAddPhoto = () => {
+    if (Platform.OS === 'web') {
+      pickFromLibrary();
+      return;
+    }
     Alert.alert('Add Photo', undefined, [
       { text: 'Take Photo', onPress: openCamera },
       { text: 'Choose from Library', onPress: pickFromLibrary },
@@ -165,11 +180,9 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
     onRemove(photo);
   };
 
-  const confirmDelete = (photo: ContactPhoto) => {
-    Alert.alert('Delete photo?', undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => removePhoto(photo) },
-    ]);
+  const confirmDelete = async (photo: ContactPhoto) => {
+    const confirmed = await confirmAction('Delete this photo?');
+    if (confirmed) removePhoto(photo);
   };
 
   return (
@@ -184,25 +197,31 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
             <PhotoImage
               photo={photo}
               localPreviewUri={localPreviews[photo.id]}
-              style={styles.thumbnail}
+              style={[styles.thumbnail, { borderColor: theme.border }]}
             />
             <Pressable onPress={() => confirmDelete(photo)} hitSlop={8} style={styles.deleteBadge}>
-              <ThemedText style={styles.deleteBadgeText}>×</ThemedText>
+              <Ionicons name="close" size={13} color="#ffffff" />
             </Pressable>
           </Pressable>
         ))}
         <Pressable
           onPress={handleAddPhoto}
           disabled={uploading}
-          style={({ pressed }) => [styles.addTile, pressed && styles.pressed]}>
-          <ThemedText type="title" style={styles.addTileText}>
-            {uploading ? '…' : '+'}
-          </ThemedText>
+          style={({ pressed }) => [
+            styles.addTile,
+            { borderColor: theme.border, backgroundColor: theme.surfaceMuted },
+            pressed && styles.pressed,
+          ]}>
+          <Ionicons
+            name={uploading ? 'hourglass-outline' : 'add'}
+            size={24}
+            color={theme.textMuted}
+          />
         </Pressable>
       </ScrollView>
 
       <Modal visible={cameraOpen} animationType="slide" presentationStyle="fullScreen">
-        <ThemedView style={styles.flex}>
+        <View style={styles.flex}>
           <CameraView ref={cameraRef} style={styles.flex} facing="back" />
           <SafeAreaView style={styles.cameraControls}>
             <Pressable onPress={() => setCameraOpen(false)} style={styles.cameraSideButton}>
@@ -212,9 +231,9 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
               onPress={takePicture}
               style={({ pressed }) => [styles.shutterButton, pressed && styles.pressed]}
             />
-            <ThemedView style={styles.cameraSideButton} />
+            <View style={styles.cameraSideButton} />
           </SafeAreaView>
-        </ThemedView>
+        </View>
       </Modal>
 
       <Modal
@@ -223,7 +242,7 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
         presentationStyle="fullScreen"
         onRequestClose={() => setViewingPhotoId(null)}>
         {viewingPhoto && (
-          <ThemedView style={styles.flex}>
+          <View style={styles.flex}>
             <PhotoImage
               photo={viewingPhoto}
               localPreviewUri={localPreviews[viewingPhoto.id]}
@@ -231,7 +250,7 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
               resizeMode="contain"
             />
             <SafeAreaView style={styles.viewerControls}>
-              <ThemedView style={styles.labelRow}>
+              <View style={styles.labelRow}>
                 {PHOTO_LABELS.map((label) => (
                   <Pressable
                     key={label}
@@ -243,29 +262,37 @@ export function PhotoPicker({ photos, onAdd, onRemove, onLabelChange }: PhotoPic
                     }
                     style={[
                       styles.labelChip,
-                      viewingPhoto.label === label && styles.labelChipSelected,
+                      viewingPhoto.label === label && [
+                        styles.labelChipSelected,
+                        { backgroundColor: theme.accent, borderColor: theme.accent },
+                      ],
                     ]}>
-                    <ThemedText type="small" style={styles.overlayText}>
+                    <ThemedText type="caption" style={styles.overlayText}>
                       {PHOTO_LABEL_TITLES[label]}
                     </ThemedText>
                   </Pressable>
                 ))}
-              </ThemedView>
-              <ThemedView style={styles.viewerButtonRow}>
+              </View>
+              <View style={styles.viewerButtonRow}>
                 <Pressable
-                  onPress={() => {
-                    removePhoto(viewingPhoto);
-                    setViewingPhotoId(null);
+                  onPress={async () => {
+                    const confirmed = await confirmAction('Delete this photo?');
+                    if (confirmed) {
+                      removePhoto(viewingPhoto);
+                      setViewingPhotoId(null);
+                    }
                   }}
                   style={styles.viewerButton}>
+                  <Ionicons name="trash-outline" size={18} color="#ffffff" />
                   <ThemedText style={styles.overlayText}>Delete</ThemedText>
                 </Pressable>
                 <Pressable onPress={() => setViewingPhotoId(null)} style={styles.viewerButton}>
+                  <Ionicons name="close" size={18} color="#ffffff" />
                   <ThemedText style={styles.overlayText}>Close</ThemedText>
                 </Pressable>
-              </ThemedView>
+              </View>
             </SafeAreaView>
-          </ThemedView>
+          </View>
         )}
       </Modal>
     </>
@@ -288,7 +315,8 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: THUMBNAIL_SIZE,
     height: THUMBNAIL_SIZE,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
   },
   deleteBadge: {
     position: 'absolute',
@@ -301,24 +329,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  deleteBadgeText: {
-    color: '#ffffff',
-    fontSize: 14,
-    lineHeight: 16,
-  },
   addTile: {
     width: THUMBNAIL_SIZE,
     height: THUMBNAIL_SIZE,
-    borderRadius: Spacing.two,
-    borderWidth: 2,
-    borderColor: '#60646c',
+    borderRadius: Radius.medium,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  addTileText: {
-    fontSize: 28,
-    lineHeight: 32,
   },
   pressed: {
     opacity: 0.7,
@@ -368,25 +386,25 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
-    backgroundColor: 'transparent',
   },
   labelChip: {
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
-    borderRadius: Spacing.five,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: '#ffffff55',
   },
   labelChipSelected: {
-    backgroundColor: '#3c87f7',
-    borderColor: '#3c87f7',
+    borderWidth: 1,
   },
   viewerButtonRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: 'transparent',
   },
   viewerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
     padding: Spacing.two,
   },
 });

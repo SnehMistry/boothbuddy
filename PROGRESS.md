@@ -3,6 +3,124 @@
 Working log for picking this project back up. See `README.md` for the
 overall roadmap and `PROMPT.md` for detailed feature specs.
 
+## Final polish pass — design system overhaul + QA (part 1: design)
+
+User asked for a full portfolio-quality visual pass on both platforms plus
+a QA sweep, working autonomously. This entry covers the design half;
+QA/bugs/deploy follow in a later entry once that pass is done.
+
+### The "harsh black boxes" bug — root cause, not just a restyle
+Before touching any visual design, tracked down why sections inside the AI
+card had black boxes behind text in dark mode: `ThemedView`'s `type` prop
+defaulted to the `background` token when omitted, and `background` in dark
+mode is `#000000`. Every `<ThemedView style={styles.section}>` used as a
+plain layout wrapper (no `type` set, i.e. most of them — Roles, Deadlines,
+Research, Sources, etc.) was rendering pure black, sitting inside an
+already-grey card. Fixed at the root: `ThemedView` now stays transparent
+unless `type` is explicitly given (`src/components/themed-view.tsx`) —
+one change, fixes every instance at once, rather than patching 30+ call
+sites individually.
+
+### Design tokens (`src/constants/theme.ts`)
+Replaced the old 5-color theme (`text`/`background`/`backgroundElement`/
+`backgroundSelected`/`textSecondary`) with the token set actually asked
+for: `background`, `surface`, `surfaceMuted`, `border`, `text`,
+`textMuted`, `accent`/`accentMuted`, `success`/`warning`/`danger` (each
+with a `*Muted` background variant), and `hot`/`warm`/`cold` for interest
+badges — light and dark. Renamed every call site rather than keeping the
+old names as aliases, using `tsc`'s literal-union type checking as a
+mechanical safety net: removing a token name from `Colors` makes every
+stale reference a compile error, so nothing could be silently missed.
+
+Also added one typography scale (`Typography` in the same file —
+`display`/`title`/`heading`/`body`/`bodyBold`/`label`/`caption`/`link`/
+`code`) driving `ThemedText`'s `type` prop, replacing the old ad hoc
+`small`/`smallBold`/`subtitle` names. **Scope decision**: used the system
+font (already set up via `Platform.select`) rather than adding Inter via
+expo-font — a custom font needs an async load gate before first paint for
+marginal gain over a well-defined system-font scale, not worth it against
+everything else in this pass. Noting this as a deliberate trade-off, not
+an oversight.
+
+### New shared primitives (`src/components/`)
+`badge.tsx`, `chip.tsx`, `checkbox.tsx` (real tappable checkboxes with an
+Ionicons checkmark, replacing ☐/☑ unicode that rendered as whatever glyph
+each platform's font happened to have for it), `card.tsx`, `button.tsx`
+(primary/secondary/danger/ghost variants, one loading-spinner treatment),
+`avatar.tsx` (initials circles for the timeline/table), `external-link-
+row.tsx` (a `displayUrl()` helper strips protocol/www/query-string junk
+like `?utm_source=...` for a clean "jobs.company.com ↗" row instead of a
+raw URL dump), `skeleton.tsx` (pulsing placeholder blocks instead of a
+blank screen or bare spinner during first load), `toast.tsx` (a small
+per-screen "Copied!" toast via a `useToast()` hook — not a global/portal
+system), and `interest-picker.tsx` (Hot/Warm/Cold as a tone-colored
+grouped-pill picker: red/amber/blue with a matching icon, replacing plain
+text chips that all looked identical regardless of level).
+
+Installed `@expo/vector-icons` for real iconography (Ionicons, one
+family, throughout) — **and imported it as `@expo/vector-icons/Ionicons`
+directly rather than the package barrel**, which matters concretely: the
+barrel import pulled in all 7 bundled icon families' font files into the
+web bundle (~2MB) even though only Ionicons is used; the direct subpath
+import only bundles Ionicons' font (~390KB). Confirmed via `expo export
+--platform web`'s asset listing before/after.
+
+### Every screen rewritten
+`sign-in-screen.tsx` (branded logo mark, tagline, show/hide password),
+`index.tsx`/`index.web.tsx` (event cards with contact/pending-followup
+counts; web home gets a stats header — people met, follow-ups sent,
+applications due this week, backed by a new `getOverallStats()` in
+`storage.ts`), `event/[id]/index.tsx` (timeline: avatar + interest badge +
+AI status icon per contact, skeleton loading), `event/[id]/index.web.tsx`
+(dashboard: per-event stats row, redesigned table/panel), `event/[id]/
+new-contact.tsx`, `event/[id]/end-of-day.tsx` and `followup-card.tsx`
+(read-only "text area" styling for drafts with a live character counter
+on the LinkedIn note, Copy/Regenerate/Open LinkedIn/Open in Gmail, and
+the new Toast instead of an inline "Copied ✓" label swap), and
+`contact/[id].tsx` (the main target of the "ugly things" list — see
+below).
+
+### `contact/[id].tsx` specifically
+- Deadlines: `Badge` pills (tone `warning`) instead of a bullet list —
+  "a highlighted date pill" as asked.
+- Interest level: `InterestPicker` instead of chips on a (formerly black)
+  strip.
+- Topics: `Chip` tags.
+- Action items / jobs: real `Checkbox` rows.
+- Company URL / email / LinkedIn / research sources: `ExternalLinkRow`
+  everywhere instead of raw URL text.
+- Research section is now collapsible (tap the header), with confidence
+  and grounded/ungrounded shown as `Badge`s instead of parenthetical text.
+- Timestamp ("Captured …") now sits next to a small clock icon at
+  `caption` size instead of looking like an unstyled debug line.
+
+### Verified so far
+`npx tsc --noEmit`, `npx expo lint`, and `npx expo-doctor` all fully
+clean (21/21 doctor checks) — including fixing two React Compiler
+"purity" lint errors surfaced by this pass itself: `useRef(...).current`
+read during render in `skeleton.tsx`/`toast.tsx` (switched to `useState`'s
+lazy initializer), and `Date.now()` called in a component body for the
+web dashboard's "due this week" stat (moved into the existing data-load
+callback, which isn't render code, instead of a `useMemo`/`useEffect` —
+neither of those satisfied the rule either, since it's specifically about
+avoiding impure reads in anything that runs during render). `npx expo
+export --platform web` bundles cleanly.
+
+### Also done as part of this same pass (touched the same screens anyway)
+- **The confirm-dialog bug**: `Alert.alert` with 2+ buttons is a no-op on
+  react-native-web (no `window.confirm`/`window.alert` call happens at
+  all for that case) — every "Delete this?"/"Sign out?" confirmation was
+  silently doing nothing on web. New `src/lib/confirm.ts`'s
+  `confirmAction()` (native: real `Alert.alert` buttons; web:
+  `window.confirm`) replaces every one of them.
+- **Change password**: `change-password-modal.tsx`, wired into both the
+  web sidebar and the mobile events list header (`supabase.auth.
+  updateUser({ password })`).
+
+**Not yet done**: the QA edge-case sweep (no internet, very long notes,
+10+ photos, AI failure/busy, empty event, session expiry, etc.) and the
+final redeploy/rebuild — tracked in the next entry once that's done.
+
 ## 2026-09-28 (later) — Gmail/LinkedIn links, delete contact/event
 
 ### Open in Gmail, LinkedIn opens in a new tab on web

@@ -1,13 +1,27 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 
+import { Avatar } from '@/components/avatar';
+import { Card } from '@/components/card';
+import { Chip } from '@/components/chip';
+import { InterestBadge } from '@/components/interest-picker';
+import { SkeletonList } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filter';
 import { useTheme } from '@/hooks/use-theme';
+import { confirmAction } from '@/lib/confirm';
 import { deleteEvent, getContactsForEvent, getEvent } from '@/lib/storage';
 import { INTEREST_LEVELS, type BoothEvent, type Contact } from '@/lib/types';
 
@@ -15,53 +29,47 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-const AI_STATUS_BADGES: Record<Contact['aiStatus'], string> = {
-  idle: '',
-  processing: ' · ✨ Processing…',
-  done: ' · ✨ Done',
-  error: ' · ⚠️ AI failed',
-};
-
 const INTEREST_FILTER_LABELS: Record<InterestFilter, string> = {
   all: 'All',
-  hot: '🔥 Hot',
-  warm: '🌤️ Warm',
-  cold: '❄️ Cold',
+  hot: 'Hot',
+  warm: 'Warm',
+  cold: 'Cold',
 };
+
+function AiStatusIcon({ status }: { status: Contact['aiStatus'] }) {
+  const theme = useTheme();
+  if (status === 'processing') return <ActivityIndicator size="small" color={theme.accent} />;
+  if (status === 'done') return <Ionicons name="checkmark-circle" size={16} color={theme.success} />;
+  if (status === 'error') return <Ionicons name="alert-circle" size={16} color={theme.danger} />;
+  return null;
+}
 
 export default function EventTimelineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const theme = useTheme();
   const [event, setEvent] = useState<BoothEvent | null>(null);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const { filtered, search, setSearch, interestFilter, setInterestFilter } =
-    useContactFilter(contacts);
+  const [contacts, setContacts] = useState<Contact[] | null>(null);
+  const { filtered, search, setSearch, interestFilter, setInterestFilter } = useContactFilter(
+    contacts ?? [],
+  );
 
   const handleDeleteEvent = useCallback(
-    (eventName: string) => {
-      Alert.alert(
+    async (eventName: string) => {
+      const confirmed = await confirmAction(
         'Delete this event?',
         `${eventName} and all of its contacts, photos, and drafts will be permanently deleted.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                await deleteEvent(id);
-                router.replace('/');
-              } catch (error) {
-                Alert.alert(
-                  "Couldn't delete event",
-                  error instanceof Error ? error.message : 'Something went wrong. Please try again.',
-                );
-              }
-            },
-          },
-        ],
       );
+      if (!confirmed) return;
+      try {
+        await deleteEvent(id);
+        router.replace('/');
+      } catch (error) {
+        Alert.alert(
+          "Couldn't delete event",
+          error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        );
+      }
     },
     [id],
   );
@@ -76,14 +84,10 @@ export default function EventTimelineScreen() {
             headerRight: () => (
               <View style={styles.headerButtons}>
                 <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)} hitSlop={8}>
-                  <ThemedText type="link" themeColor="textSecondary">
-                    End of Day
-                  </ThemedText>
+                  <Ionicons name="moon-outline" size={20} color={theme.textMuted} />
                 </Pressable>
                 <Pressable onPress={() => handleDeleteEvent(found.name)} hitSlop={8}>
-                  <ThemedText type="link" themeColor="textSecondary">
-                    Delete
-                  </ThemedText>
+                  <Ionicons name="trash-outline" size={20} color={theme.danger} />
                 </Pressable>
               </View>
             ),
@@ -91,7 +95,7 @@ export default function EventTimelineScreen() {
         }
       });
       getContactsForEvent(id).then(setContacts);
-    }, [id, navigation, handleDeleteEvent]),
+    }, [id, navigation, handleDeleteEvent, theme]),
   );
 
   // AI processing kicks off in the background right after a contact is
@@ -99,7 +103,7 @@ export default function EventTimelineScreen() {
   // is still processing so the badge below updates without the user having
   // to leave and re-open this screen.
   useEffect(() => {
-    if (!contacts.some((c) => c.aiStatus === 'processing')) return;
+    if (!contacts?.some((c) => c.aiStatus === 'processing')) return;
     const interval = setInterval(() => {
       getContactsForEvent(id).then(setContacts);
     }, 4000);
@@ -107,50 +111,56 @@ export default function EventTimelineScreen() {
   }, [contacts, id]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['bottom']}>
       {event && (
-        <ThemedView style={styles.eventInfo}>
-          <ThemedText type="small" themeColor="textSecondary">
+        <View style={styles.eventInfo}>
+          <ThemedText type="caption" themeColor="textMuted">
             {event.date}
-            {event.location ? ` · ${event.location}` : ''} · {contacts.length}{' '}
-            {contacts.length === 1 ? 'contact' : 'contacts'}
+            {event.location ? ` · ${event.location}` : ''} · {contacts?.length ?? 0}{' '}
+            {(contacts?.length ?? 0) === 1 ? 'contact' : 'contacts'}
           </ThemedText>
-        </ThemedView>
+        </View>
       )}
 
-      {contacts.length === 0 ? (
-        <ThemedView style={styles.emptyState}>
-          <ThemedText type="subtitle" style={styles.centerText}>
+      {contacts === null ? (
+        <SkeletonList />
+      ) : contacts.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="people-outline" size={40} color={theme.textMuted} />
+          <ThemedText type="heading" style={styles.centerText}>
             No contacts yet
           </ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.centerText}>
+          <ThemedText type="body" themeColor="textMuted" style={styles.centerText}>
             Tap &ldquo;New Contact&rdquo; right after each conversation, while it&apos;s still
             fresh.
           </ThemedText>
-        </ThemedView>
+        </View>
       ) : (
         <>
-          <ThemedView style={styles.searchBar}>
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search name or company…"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.searchInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-            />
-            <ThemedView style={styles.filterRow}>
+          <View style={styles.searchBar}>
+            <View style={[styles.searchInputWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="search" size={16} color={theme.textMuted} />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search name or company…"
+                placeholderTextColor={theme.textMuted}
+                style={[styles.searchInput, { color: theme.text }]}
+              />
+            </View>
+            <View style={styles.filterRow}>
               {(['all', ...INTEREST_LEVELS] as InterestFilter[]).map((level) => (
-                <Pressable
+                <Chip
                   key={level}
+                  label={INTEREST_FILTER_LABELS[level]}
+                  selected={interestFilter === level}
                   onPress={() => setInterestFilter(level)}
-                  style={[styles.filterChip, interestFilter === level && styles.filterChipSelected]}>
-                  <ThemedText type="small">{INTEREST_FILTER_LABELS[level]}</ThemedText>
-                </Pressable>
+                />
               ))}
-            </ThemedView>
-          </ThemedView>
+            </View>
+          </View>
           {filtered.length === 0 ? (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+            <ThemedText type="body" themeColor="textMuted" style={styles.centerText}>
               No contacts match.
             </ThemedText>
           ) : (
@@ -159,18 +169,23 @@ export default function EventTimelineScreen() {
               keyExtractor={(contact) => contact.id}
               contentContainerStyle={styles.list}
               renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => router.push(`/contact/${item.id}`)}
-                  style={({ pressed }) => [styles.contactCard, pressed && styles.pressed]}>
-                  <ThemedView type="backgroundElement" style={styles.contactCardInner}>
-                    <ThemedText type="smallBold">{item.name || 'Unnamed contact'}</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {formatTime(item.createdAt)}
-                      {item.photos.length > 0 ? ` · 📷×${item.photos.length}` : ''}
-                      {AI_STATUS_BADGES[item.aiStatus]}
+                <Card onPress={() => router.push(`/contact/${item.id}`)} style={styles.contactCard}>
+                  <Avatar name={item.name || '?'} size={40} />
+                  <View style={styles.contactInfo}>
+                    <ThemedText type="bodyBold" numberOfLines={1}>
+                      {item.name || 'Unnamed contact'}
                     </ThemedText>
-                  </ThemedView>
-                </Pressable>
+                    <View style={styles.contactMetaRow}>
+                      <ThemedText type="caption" themeColor="textMuted">
+                        {item.company ? `${item.company} · ` : ''}
+                        {formatTime(item.createdAt)}
+                        {item.photos.length > 0 ? ` · ${item.photos.length} photo${item.photos.length === 1 ? '' : 's'}` : ''}
+                      </ThemedText>
+                    </View>
+                  </View>
+                  {item.interestLevel && <InterestBadge level={item.interestLevel} />}
+                  <AiStatusIcon status={item.aiStatus} />
+                </Card>
               )}
             />
           )}
@@ -179,9 +194,14 @@ export default function EventTimelineScreen() {
 
       <Pressable
         onPress={() => router.push(`/event/${id}/new-contact`)}
-        style={({ pressed }) => [styles.newContactButton, pressed && styles.pressed]}>
-        <ThemedText type="title" style={styles.newContactButtonText}>
-          + New Contact
+        style={({ pressed }) => [
+          styles.newContactButton,
+          { backgroundColor: theme.accent },
+          pressed && styles.pressed,
+        ]}>
+        <Ionicons name="add" size={22} color="#ffffff" />
+        <ThemedText type="heading" style={styles.newContactButtonText}>
+          New Contact
         </ThemedText>
       </Pressable>
     </SafeAreaView>
@@ -191,7 +211,7 @@ export default function EventTimelineScreen() {
 const styles = StyleSheet.create({
   headerButtons: {
     flexDirection: 'row',
-    gap: Spacing.three,
+    gap: Spacing.four,
   },
   container: {
     flex: 1,
@@ -215,9 +235,16 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     gap: Spacing.two,
   },
-  searchInput: {
-    borderRadius: Spacing.two,
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     paddingHorizontal: Spacing.three,
+  },
+  searchInput: {
+    flex: 1,
     paddingVertical: Spacing.two,
     fontSize: 16,
   },
@@ -226,43 +253,37 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.two,
   },
-  filterChip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.five,
-    borderWidth: 1,
-    borderColor: '#60646c55',
-  },
-  filterChipSelected: {
-    borderColor: '#3c87f7',
-    borderWidth: 2,
-  },
   list: {
     padding: Spacing.three,
     gap: Spacing.two,
   },
   contactCard: {
-    borderRadius: Spacing.three,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
   },
-  contactCardInner: {
-    borderRadius: Spacing.three,
-    padding: Spacing.three,
-    gap: Spacing.half,
+  contactInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  contactMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   pressed: {
-    opacity: 0.7,
+    opacity: 0.85,
   },
   newContactButton: {
-    backgroundColor: '#3c87f7',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
     marginHorizontal: Spacing.three,
     marginBottom: Spacing.three,
     paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-    alignItems: 'center',
+    borderRadius: Radius.large,
   },
   newContactButtonText: {
     color: '#ffffff',
-    fontSize: 20,
-    lineHeight: 24,
   },
 });
