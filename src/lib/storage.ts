@@ -345,6 +345,7 @@ export async function updateContact(
   const updates: Record<string, unknown> = {};
   if (patch.name !== undefined) updates.name = patch.name;
   if (patch.companyUrl !== undefined) updates.company_url = patch.companyUrl ?? null;
+  if (patch.linkedinUrl !== undefined) updates.linkedin_url = patch.linkedinUrl ?? null;
   if (patch.notes !== undefined) updates.notes = patch.notes ?? null;
   if (patch.interestLevel !== undefined) updates.interest_level = patch.interestLevel ?? null;
   if (patch.followupStatus !== undefined) updates.followup_status = patch.followupStatus;

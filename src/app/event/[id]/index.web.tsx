@@ -21,6 +21,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { confirmAction } from '@/lib/confirm';
 import { isDueWithinDays } from '@/lib/deadlines';
 import { describeAiError } from '@/lib/ai-errors';
+import { exportContactsCsv } from '@/lib/export-csv';
 import { formatDateTime, formatHumanDate } from '@/lib/dates';
 import {
   deleteContact,
@@ -354,6 +355,18 @@ export default function EventDashboardScreen() {
     }
   };
 
+  const handleExport = async () => {
+    if (!event) return;
+    try {
+      await exportContactsCsv(event.name, contacts);
+    } catch (error) {
+      Alert.alert(
+        "Couldn't export CSV",
+        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      );
+    }
+  };
+
   const handleDeleteEvent = async () => {
     if (!event) return;
     const confirmed = await confirmAction(
@@ -406,6 +419,12 @@ export default function EventDashboardScreen() {
               <Ionicons name="moon-outline" size={15} color={theme.accent} />
               <ThemedText type="link" themeColor="accentStrong">
                 End of Day
+              </ThemedText>
+            </Pressable>
+            <Pressable onPress={handleExport} style={styles.toolbarLink}>
+              <Ionicons name="download-outline" size={15} color={theme.accent} />
+              <ThemedText type="link" themeColor="accentStrong">
+                Export CSV
               </ThemedText>
             </Pressable>
             <Pressable onPress={handleDeleteEvent} style={styles.toolbarLink}>

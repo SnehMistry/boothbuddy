@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -44,6 +44,7 @@ export function SignInScreen() {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const passwordInputRef = useRef<TextInput>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +119,8 @@ export function SignInScreen() {
               autoCorrect={false}
               keyboardType="email-address"
               textContentType="emailAddress"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordInputRef.current?.focus()}
               style={[styles.input, { color: theme.text, backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
             />
 
@@ -126,6 +129,7 @@ export function SignInScreen() {
             </ThemedText>
             <View style={styles.passwordRow}>
               <TextInput
+                ref={passwordInputRef}
                 value={password}
                 onChangeText={(text) => {
                   setPassword(text);
@@ -137,6 +141,8 @@ export function SignInScreen() {
                 placeholderTextColor={theme.textMuted}
                 secureTextEntry={!showPassword}
                 textContentType={mode === 'sign-up' ? 'newPassword' : 'password'}
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
                 style={[
                   styles.input,
                   styles.passwordInput,

@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
+import { useEscapeKey } from '@/hooks/use-escape-key';
 import { useTheme } from '@/hooks/use-theme';
 import { createEvent } from '@/lib/storage';
 
@@ -20,6 +21,8 @@ export default function NewEventScreen() {
   const [saving, setSaving] = useState(false);
 
   const canSave = name.trim().length > 0 && !saving;
+
+  useEscapeKey(() => router.back());
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -44,6 +47,8 @@ export default function NewEventScreen() {
           autoFocus
           value={name}
           onChangeText={setName}
+          onSubmitEditing={handleSave}
+          returnKeyType="done"
           placeholder="e.g. UCSD Career Fair"
           placeholderTextColor={theme.textMuted}
           style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
@@ -55,6 +60,8 @@ export default function NewEventScreen() {
         <TextInput
           value={date}
           onChangeText={setDate}
+          onSubmitEditing={handleSave}
+          returnKeyType="done"
           placeholder="YYYY-MM-DD"
           placeholderTextColor={theme.textMuted}
           style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
@@ -66,6 +73,8 @@ export default function NewEventScreen() {
         <TextInput
           value={location}
           onChangeText={setLocation}
+          onSubmitEditing={handleSave}
+          returnKeyType="done"
           placeholder="e.g. RIMAC Arena"
           placeholderTextColor={theme.textMuted}
           style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}

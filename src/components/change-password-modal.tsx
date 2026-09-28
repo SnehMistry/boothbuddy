@@ -4,6 +4,7 @@ import { Alert, Modal, Pressable, StyleSheet, TextInput, View } from 'react-nati
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
+import { useEscapeKey } from '@/hooks/use-escape-key';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 
@@ -31,6 +32,8 @@ export function ChangePasswordModal({ visible, onClose }: { visible: boolean; on
     reset();
     onClose();
   };
+
+  useEscapeKey(handleClose, visible);
 
   const handleSubmit = async () => {
     if (password.length < MIN_PASSWORD_LENGTH) {
@@ -88,6 +91,8 @@ export function ChangePasswordModal({ visible, onClose }: { visible: boolean; on
             placeholderTextColor={theme.textMuted}
             secureTextEntry
             textContentType="newPassword"
+            onSubmitEditing={handleSubmit}
+            returnKeyType="done"
             style={[styles.input, { color: theme.text, backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
           />
 

@@ -50,7 +50,8 @@
           "photosPermission": "BoothBuddy uses your photo library so you can attach an existing photo of a business card or badge.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

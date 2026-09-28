@@ -23,6 +23,7 @@ import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filte
 import { useTheme } from '@/hooks/use-theme';
 import { confirmAction } from '@/lib/confirm';
 import { formatHumanDate } from '@/lib/dates';
+import { exportContactsCsv } from '@/lib/export-csv';
 import { deleteEvent, getContactsForEvent, getEvent } from '@/lib/storage';
 import { INTEREST_LEVELS, type BoothEvent, type Contact } from '@/lib/types';
 
@@ -75,6 +76,21 @@ export default function EventTimelineScreen() {
     [id],
   );
 
+  const handleExport = useCallback(
+    async (eventName: string) => {
+      try {
+        const current = await getContactsForEvent(id);
+        await exportContactsCsv(eventName, current);
+      } catch (error) {
+        Alert.alert(
+          "Couldn't export CSV",
+          error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        );
+      }
+    },
+    [id],
+  );
+
   useFocusEffect(
     useCallback(() => {
       getEvent(id).then((found) => {
@@ -87,6 +103,9 @@ export default function EventTimelineScreen() {
                 <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)} hitSlop={12}>
                   <Ionicons name="moon-outline" size={20} color={theme.textMuted} />
                 </Pressable>
+                <Pressable onPress={() => handleExport(found.name)} hitSlop={12}>
+                  <Ionicons name="download-outline" size={20} color={theme.textMuted} />
+                </Pressable>
                 <Pressable onPress={() => handleDeleteEvent(found.name)} hitSlop={12}>
                   <Ionicons name="trash-outline" size={20} color={theme.danger} />
                 </Pressable>
@@ -96,7 +115,7 @@ export default function EventTimelineScreen() {
         }
       });
       getContactsForEvent(id).then(setContacts);
-    }, [id, navigation, handleDeleteEvent, theme]),
+    }, [id, navigation, handleDeleteEvent, handleExport, theme]),
   );
 
   // AI processing kicks off in the background right after a contact is

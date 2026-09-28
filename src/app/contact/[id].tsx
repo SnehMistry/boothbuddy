@@ -47,6 +47,7 @@ export default function ContactDetailScreen() {
   const [jobs, setJobs] = useState<JobOpportunity[]>([]);
   const [name, setName] = useState('');
   const [companyUrl, setCompanyUrl] = useState('');
+  const [linkedinUrl, setLinkedinUrl] = useState('');
   const [notes, setNotes] = useState('');
   const [processing, setProcessing] = useState(false);
   const [researchExpanded, setResearchExpanded] = useState(true);
@@ -61,6 +62,7 @@ export default function ContactDetailScreen() {
       setContact(found);
       setName(found.name);
       setCompanyUrl(found.companyUrl ?? '');
+      setLinkedinUrl(found.linkedinUrl ?? '');
       setNotes(found.notes ?? '');
     }
     setActionItems(items);
@@ -96,6 +98,13 @@ export default function ContactDetailScreen() {
     setCompanyUrl(cleaned);
     if (!contact || cleaned === (contact.companyUrl ?? '')) return;
     const updated = await updateContact(contact.id, { companyUrl: cleaned || undefined });
+    if (updated) setContact(updated);
+  };
+
+  const saveLinkedinUrl = async () => {
+    const trimmed = linkedinUrl.trim();
+    if (!contact || trimmed === (contact.linkedinUrl ?? '')) return;
+    const updated = await updateContact(contact.id, { linkedinUrl: trimmed || undefined });
     if (updated) setContact(updated);
   };
 
@@ -525,6 +534,28 @@ export default function ContactDetailScreen() {
         </View>
       )}
 
+      <ThemedText type="label" themeColor="textMuted" style={styles.sectionSpacing}>
+        LinkedIn URL
+      </ThemedText>
+      <ThemedText type="caption" themeColor="textMuted" style={styles.hint}>
+        &ldquo;Open LinkedIn&rdquo; uses this if set, otherwise it searches by name and company.
+      </ThemedText>
+      <TextInput
+        value={linkedinUrl}
+        onChangeText={setLinkedinUrl}
+        onBlur={saveLinkedinUrl}
+        placeholder="https://linkedin.com/in/..."
+        placeholderTextColor={theme.textMuted}
+        autoCapitalize="none"
+        keyboardType="url"
+        style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
+      />
+      {!!contact.linkedinUrl && (
+        <View style={styles.companyLinkRow}>
+          <ExternalLinkRow url={contact.linkedinUrl} variant="chip" />
+        </View>
+      )}
+
       <Button
         label="Delete Contact"
         variant="danger"
@@ -551,6 +582,10 @@ const styles = StyleSheet.create({
   },
   sectionSpacing: {
     marginTop: Spacing.four,
+  },
+  hint: {
+    marginTop: -2,
+    marginBottom: 2,
   },
   input: {
     borderRadius: Radius.medium,
