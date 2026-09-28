@@ -13,6 +13,8 @@ import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filte
 import { useTheme } from '@/hooks/use-theme';
 import { describeAiError } from '@/lib/ai-errors';
 import {
+  deleteContact,
+  deleteEvent,
   generateFollowup,
   getContactsForEvent,
   getEvent,
@@ -55,6 +57,7 @@ function ContactDetailPanel({
   onFollowupStatusChange,
   onInterestChange,
   onMatchStatus,
+  onDelete,
 }: {
   contact: Contact;
   processing: boolean;
@@ -66,6 +69,7 @@ function ContactDetailPanel({
   onFollowupStatusChange: Parameters<typeof FollowupCard>[0]['onStatusChange'];
   onInterestChange: (contact: Contact, level: InterestLevel) => void;
   onMatchStatus: (contact: Contact, status: 'confirmed' | 'rejected') => void;
+  onDelete: (contact: Contact) => void;
 }) {
   return (
     <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
@@ -194,6 +198,14 @@ function ContactDetailPanel({
         onRegenerate={onRegenerateFollowup}
         onStatusChange={onFollowupStatusChange}
       />
+
+      <Pressable
+        onPress={() => onDelete(contact)}
+        style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}>
+        <ThemedText type="smallBold" style={styles.deleteButtonText}>
+          Delete Contact
+        </ThemedText>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -302,6 +314,58 @@ export default function EventDashboardScreen() {
     await updateContact(contact.id, { followupStatus }).catch(() => {});
   };
 
+  const handleDeleteContact = (contact: Contact) => {
+    Alert.alert(
+      'Delete this contact?',
+      `${contact.name || 'This contact'}, their photos, and any AI research/drafts will be permanently deleted.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteContact(contact);
+              setContacts((prev) => prev.filter((c) => c.id !== contact.id));
+              setSelectedId((current) => (current === contact.id ? null : current));
+            } catch (error) {
+              Alert.alert(
+                "Couldn't delete contact",
+                error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDeleteEvent = () => {
+    if (!event) return;
+    Alert.alert(
+      'Delete this event?',
+      `${event.name} and all of its contacts, photos, and drafts will be permanently deleted.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteEvent(id);
+              router.replace('/');
+            } catch (error) {
+              Alert.alert(
+                "Couldn't delete event",
+                error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
   if (!event) return <LoadingView />;
 
   return (
@@ -319,6 +383,11 @@ export default function EventDashboardScreen() {
             </Pressable>
             <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)}>
               <ThemedText type="link">End of Day →</ThemedText>
+            </Pressable>
+            <Pressable onPress={handleDeleteEvent}>
+              <ThemedText type="link" themeColor="textSecondary">
+                Delete Event
+              </ThemedText>
             </Pressable>
           </ThemedView>
         </ThemedView>
@@ -404,6 +473,7 @@ export default function EventDashboardScreen() {
           onFollowupStatusChange={handleFollowupStatusChange}
           onInterestChange={handleInterestChange}
           onMatchStatus={handleMatchStatus}
+          onDelete={handleDeleteContact}
         />
       ) : (
         <ThemedView style={styles.panelEmpty}>
@@ -547,5 +617,18 @@ const styles = StyleSheet.create({
   },
   sectionSpacing: {
     marginTop: Spacing.four,
+  },
+  deleteButton: {
+    marginTop: Spacing.six,
+    paddingVertical: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: 1,
+    borderColor: '#e0483e',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.four,
+  },
+  deleteButtonText: {
+    color: '#e0483e',
   },
 });

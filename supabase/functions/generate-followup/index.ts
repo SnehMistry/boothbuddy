@@ -17,6 +17,7 @@ type Tone = (typeof TONES)[number];
 type Draft = {
   linkedinNote: string;
   linkedinMessage: string;
+  emailSubject: string;
   emailDraft: string;
 };
 
@@ -31,12 +32,16 @@ const DRAFT_SCHEMA: GeminiSchema = {
       type: 'string',
       description: 'A longer follow-up message to send after they accept the connection.',
     },
+    emailSubject: {
+      type: 'string',
+      description: 'Just the email subject line, no "Subject:" prefix. Empty string if told not to write an email.',
+    },
     emailDraft: {
       type: 'string',
-      description: 'A follow-up email draft (subject + body). Empty string if told not to write one.',
+      description: 'The email body only, not including the subject line. Empty string if told not to write one.',
     },
   },
-  required: ['linkedinNote', 'linkedinMessage', 'emailDraft'],
+  required: ['linkedinNote', 'linkedinMessage', 'emailSubject', 'emailDraft'],
 };
 
 Deno.serve(async (req) => {
@@ -112,8 +117,8 @@ Write:
 2. A longer follow-up message for after they accept the connection request — also reference specifics, and ${
       contact.roles_mentioned?.length ? 'mention the opportunity discussed if relevant.' : "keep it warm and specific."
     }
-3. A follow-up email draft (with a short subject line and body)${
-      contact.email ? '' : ' — there is no email on file, so return an empty string for this field'
+3. A follow-up email: a short subject line and a body${
+      contact.email ? '' : ' — there is no email on file, so return empty strings for both of these fields'
     }.
 
 Don't invent details that aren't given above. Respond with the JSON object matching the schema, nothing else.`;
@@ -129,6 +134,7 @@ Don't invent details that aren't given above. Respond with the JSON object match
       .update({
         linkedin_note: linkedinNote,
         linkedin_message: draft.linkedinMessage,
+        email_subject: contact.email ? draft.emailSubject || null : null,
         email_draft: contact.email ? draft.emailDraft || null : null,
         followup_tone: tone,
         followup_generated_at: new Date().toISOString(),

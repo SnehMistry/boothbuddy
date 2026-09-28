@@ -3,6 +3,44 @@
 Working log for picking this project back up. See `README.md` for the
 overall roadmap and `PROMPT.md` for detailed feature specs.
 
+## 2026-09-28 (later) — Gmail/LinkedIn links, delete contact/event
+
+### Open in Gmail, LinkedIn opens in a new tab on web
+`generate-followup`'s schema now returns `emailSubject` and `emailDraft`
+(body) as separate fields instead of one combined string — needed so
+Gmail's compose URL can pre-fill `su=`/`body=` params independently
+(new `email_subject` column, migration `20260929000000_email_subject.sql`).
+`FollowupCard` (shared by both platforms) gets a web-only "Open in Gmail"
+button next to the email draft, using Gmail's `mail.google.com/mail/
+?view=cm&fs=1&...` compose URL — no API, no OAuth, $0 — opened in a new
+tab via `window.open`, falling back to `mailto:` in the same tab if the
+popup gets blocked. "Open LinkedIn" now goes through the same
+`openExternalLink` helper, so it opens in a new tab on web too (native is
+unaffected — `Linking.openURL` either way, no tab concept there).
+
+### Delete contact / Delete event
+DB cleanup for related rows needed no new code — `contact_photos`,
+`action_items`, and `job_opportunities` all already have `on delete
+cascade` back to `contacts`, and `contacts.event_id` cascades from
+`events`, from the very first migration. The only manual step is Supabase
+Storage: photo *objects* aren't part of Postgres, so `deleteContact`/
+`deleteEvent` (`storage.ts`) explicitly `storage.from('photos').remove(
+[...])` every photo path before deleting the row(s), or they'd be
+orphaned in the bucket with nothing left pointing at them.
+
+UI: a red "Delete Contact" button on the shared `contact/[id]` screen
+(covers phone and web's "edit" deep view), plus a matching one directly
+in the web dashboard's inline contact panel (so deleting doesn't require
+navigating away from the table first). "Delete Event" as a header action
+next to "End of Day" on the mobile timeline, and a toolbar link on the
+web dashboard. Both platforms confirm via `Alert.alert` with a
+destructive-styled button before deleting anything — same pattern
+already used for sign-out and photo deletion.
+
+**Verified**: `npx tsc --noEmit` and `npx expo lint` clean, `npx expo
+export --platform web` bundles, migration pushed, `generate-followup`
+redeployed. Web app redeployed and the APK rebuilt after this batch.
+
 ## 2026-09-28 — EAS APK crashed on launch
 
 First standalone build installed but crashed immediately (opens and

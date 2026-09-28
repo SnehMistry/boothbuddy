@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { AiErrorNotice } from '@/components/ai-error-notice';
 import { LoadingView } from '@/components/loading-view';
@@ -12,6 +12,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { describeAiError } from '@/lib/ai-errors';
 import {
   addPhotoToContact,
+  deleteContact,
   getActionItemsForContact,
   getContact,
   getJobsForContact,
@@ -181,6 +182,33 @@ export default function ContactDetailScreen() {
     if (!contact) return;
     const updated = await setResearchMatchStatus(contact, matchStatus);
     if (updated) setContact(updated);
+  };
+
+  const handleDelete = () => {
+    if (!contact) return;
+    const eventId = contact.eventId;
+    Alert.alert(
+      'Delete this contact?',
+      `${contact.name || 'This contact'}, their photos, and any AI research/drafts will be permanently deleted.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteContact(contact);
+              router.replace(`/event/${eventId}`);
+            } catch (error) {
+              Alert.alert(
+                "Couldn't delete contact",
+                error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (!contact) return <LoadingView />;
@@ -471,6 +499,14 @@ export default function ContactDetailScreen() {
           <ThemedText type="linkPrimary">Open {contact.companyUrl}</ThemedText>
         </Pressable>
       )}
+
+      <Pressable
+        onPress={handleDelete}
+        style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}>
+        <ThemedText type="smallBold" style={styles.deleteButtonText}>
+          Delete Contact
+        </ThemedText>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -525,6 +561,17 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  deleteButton: {
+    marginTop: Spacing.six,
+    paddingVertical: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: 1,
+    borderColor: '#e0483e',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#e0483e',
   },
   card: {
     marginTop: Spacing.three,

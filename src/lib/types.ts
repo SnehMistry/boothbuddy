@@ -106,6 +106,7 @@ export type Contact = {
   // Follow-up drafts (Phase 4) — unset until generated once.
   linkedinNote?: string;
   linkedinMessage?: string;
+  emailSubject?: string;
   emailDraft?: string;
   followupTone: FollowupTone;
   followupStatus: FollowupStatus;

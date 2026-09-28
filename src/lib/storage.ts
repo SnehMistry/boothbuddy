@@ -46,6 +46,7 @@ type ContactRow = {
   research: ContactResearch | null;
   linkedin_note: string | null;
   linkedin_message: string | null;
+  email_subject: string | null;
   email_draft: string | null;
   followup_tone: FollowupTone;
   followup_status: FollowupStatus;
@@ -122,6 +123,7 @@ function contactFromRow(row: ContactRow, photos: ContactPhoto[]): Contact {
     research: row.research ?? undefined,
     linkedinNote: row.linkedin_note ?? undefined,
     linkedinMessage: row.linkedin_message ?? undefined,
+    emailSubject: row.email_subject ?? undefined,
     emailDraft: row.email_draft ?? undefined,
     followupTone: row.followup_tone,
     followupStatus: row.followup_status,
@@ -178,6 +180,21 @@ export async function createEvent(input: {
     .single();
   if (error) throw error;
   return eventFromRow(data as EventRow);
+}
+
+// Deletes the event and (via "on delete cascade" FKs) every contact,
+// photo row, action item, and job under it — but Storage objects aren't
+// part of Postgres, so their cleanup has to happen explicitly here first,
+// or they'd be orphaned in the bucket forever with nothing pointing at
+// them.
+export async function deleteEvent(eventId: string): Promise<void> {
+  const contacts = await getContactsForEvent(eventId);
+  const photoPaths = contacts.flatMap((contact) => contact.photos.map((photo) => photo.storagePath));
+  if (photoPaths.length > 0) {
+    await supabase.storage.from('photos').remove(photoPaths);
+  }
+  const { error } = await supabase.from('events').delete().eq('id', eventId);
+  if (error) throw error;
 }
 
 async function getPhotosForContacts(contactIds: string[]): Promise<Map<string, ContactPhoto[]>> {
@@ -277,6 +294,17 @@ export async function updateContact(
   if (error) throw error;
 
   return getContact(id);
+}
+
+// Deletes the contact and (via "on delete cascade" FKs) its
+// contact_photos/action_items/job_opportunities rows — but, same as
+// deleteEvent, the actual Storage objects need removing explicitly first.
+export async function deleteContact(contact: Contact): Promise<void> {
+  if (contact.photos.length > 0) {
+    await supabase.storage.from('photos').remove(contact.photos.map((photo) => photo.storagePath));
+  }
+  const { error } = await supabase.from('contacts').delete().eq('id', contact.id);
+  if (error) throw error;
 }
 
 export async function addPhotoToContact(

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 
@@ -8,7 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filter';
 import { useTheme } from '@/hooks/use-theme';
-import { getContactsForEvent, getEvent } from '@/lib/storage';
+import { deleteEvent, getContactsForEvent, getEvent } from '@/lib/storage';
 import { INTEREST_LEVELS, type BoothEvent, type Contact } from '@/lib/types';
 
 function formatTime(iso: string) {
@@ -38,6 +38,34 @@ export default function EventTimelineScreen() {
   const { filtered, search, setSearch, interestFilter, setInterestFilter } =
     useContactFilter(contacts);
 
+  const handleDeleteEvent = useCallback(
+    (eventName: string) => {
+      Alert.alert(
+        'Delete this event?',
+        `${eventName} and all of its contacts, photos, and drafts will be permanently deleted.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteEvent(id);
+                router.replace('/');
+              } catch (error) {
+                Alert.alert(
+                  "Couldn't delete event",
+                  error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+                );
+              }
+            },
+          },
+        ],
+      );
+    },
+    [id],
+  );
+
   useFocusEffect(
     useCallback(() => {
       getEvent(id).then((found) => {
@@ -46,17 +74,24 @@ export default function EventTimelineScreen() {
           navigation.setOptions({
             title: found.name,
             headerRight: () => (
-              <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)} hitSlop={8}>
-                <ThemedText type="link" themeColor="textSecondary">
-                  End of Day
-                </ThemedText>
-              </Pressable>
+              <View style={styles.headerButtons}>
+                <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)} hitSlop={8}>
+                  <ThemedText type="link" themeColor="textSecondary">
+                    End of Day
+                  </ThemedText>
+                </Pressable>
+                <Pressable onPress={() => handleDeleteEvent(found.name)} hitSlop={8}>
+                  <ThemedText type="link" themeColor="textSecondary">
+                    Delete
+                  </ThemedText>
+                </Pressable>
+              </View>
             ),
           });
         }
       });
       getContactsForEvent(id).then(setContacts);
-    }, [id, navigation]),
+    }, [id, navigation, handleDeleteEvent]),
   );
 
   // AI processing kicks off in the background right after a contact is
@@ -154,6 +189,10 @@ export default function EventTimelineScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerButtons: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+  },
   container: {
     flex: 1,
   },
