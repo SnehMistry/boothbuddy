@@ -3,6 +3,51 @@
 Working log for picking this project back up. See `README.md` for the
 overall roadmap and `PROMPT.md` for detailed feature specs.
 
+## 2026-09-28 — EAS APK crashed on launch
+
+First standalone build installed but crashed immediately (opens and
+closes); Expo Go worked fine. User's own hypothesis was correct and
+matched the exact evidence: the first build's own log said
+
+> Resolved "preview" environment for the build...
+> No environment variables with visibility "Plain text" and "Sensitive"
+> found for the "preview" environment on EAS.
+
+`src/lib/supabase.ts` `throw`s at module scope if
+`EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are
+missing — that module is imported before anything renders, so the throw
+crashes the whole app before a single frame draws. Expo Go never hits
+this because it reads `.env` directly from the project on your machine;
+a cloud EAS build has no access to your local `.env` (it's gitignored,
+correctly) and needs the values set as EAS environment variables
+instead — a real, asymmetric gap between the two, not a config mistake.
+
+**Fixed**:
+- `eas env:set` for both values, environments `production`, `preview`,
+  and `development`, `--visibility plaintext` — safe, since both are
+  already meant to ship inside the compiled app (same values already
+  living in the git-tracked `.env.example`'s comments explaining they're
+  public). Never touched `GEMINI_API_KEY` or any service-role key here.
+- `supabase.ts` no longer throws — it exports `supabaseConfigError`
+  instead and falls back to placeholder client-init values, so a future
+  missing-config scenario can't crash the app the same way again. Both
+  root layouts (`_layout.tsx`, `_layout.web.tsx`) check it first and
+  render a new `ConfigErrorScreen` instead of the sign-in/dashboard tree
+  when it's set.
+- Checked for other Expo-Go-vs-standalone-build discrepancies:
+  `expo-doctor` found real (if minor) SDK version mismatches on 5
+  packages — patch-level, but worth fixing precisely because Expo Go
+  always runs its own bundled SDK version regardless of `package.json`,
+  while a standalone build uses exactly what's installed, so a version
+  mismatch is a genuine place the two environments can diverge. Fixed
+  via `npx expo install --fix`; `expo-doctor` now reports 21/21 clean.
+  Found no other native-module/plugin/architecture discrepancy — the
+  `babel.config.js`/`metro.config.js`-absent default setup is unchanged
+  and applies identically to both environments (bundling doesn't differ
+  between Expo Go and a standalone build; only compiled-in native code
+  does).
+- Rebuilt the APK after all of the above.
+
 ## 2026-09-27 (later) — interest-level bug, real grounding attempt, EAS
 
 User confirmed: "AI processing works now, great results" — the first

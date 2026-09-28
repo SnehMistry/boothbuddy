@@ -3,8 +3,10 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { ConfigErrorScreen } from '@/components/config-error-screen';
 import { SignInScreen } from '@/components/sign-in-screen';
 import { useSession } from '@/hooks/use-session';
+import { supabaseConfigError } from '@/lib/supabase';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -15,7 +17,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      {loading ? null : session ? (
+      {supabaseConfigError ? (
+        <ConfigErrorScreen message={supabaseConfigError} />
+      ) : loading ? null : session ? (
         <Stack>
           <Stack.Screen name="index" options={{ title: 'BoothBuddy' }} />
           <Stack.Screen

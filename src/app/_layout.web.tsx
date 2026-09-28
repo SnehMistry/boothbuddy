@@ -1,10 +1,12 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { View, useColorScheme } from 'react-native';
 
+import { ConfigErrorScreen } from '@/components/config-error-screen';
 import { LoadingView } from '@/components/loading-view';
 import { SignInScreen } from '@/components/sign-in-screen';
 import { WebSidebar } from '@/components/web-sidebar';
 import { useSession } from '@/hooks/use-session';
+import { supabaseConfigError } from '@/lib/supabase';
 
 // Web gets its own root layout — a persistent sidebar (event list, "+ New
 // Event", sign out) next to the same Stack native uses, so a click on a
@@ -16,6 +18,7 @@ export default function WebRootLayout() {
   const colorScheme = useColorScheme();
   const { session, loading } = useSession();
 
+  if (supabaseConfigError) return <ConfigErrorScreen message={supabaseConfigError} />;
   if (loading) return <LoadingView />;
   if (!session) return <SignInScreen />;
 
