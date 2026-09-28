@@ -3,6 +3,7 @@ import { Alert, Linking, Pressable, ScrollView, StyleSheet, TextInput } from 're
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
+import { AiErrorNotice } from '@/components/ai-error-notice';
 import { FollowupCard } from '@/components/followup-card';
 import { LoadingView } from '@/components/loading-view';
 import { ThemedText } from '@/components/themed-text';
@@ -10,6 +11,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filter';
 import { useTheme } from '@/hooks/use-theme';
+import { describeAiError } from '@/lib/ai-errors';
 import {
   generateFollowup,
   getContactsForEvent,
@@ -164,18 +166,21 @@ function ContactDetailPanel({
           )}
         </ThemedView>
       ) : (
-        <Pressable
-          onPress={() => onProcess(contact)}
-          disabled={processing}
-          style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}>
-          <ThemedText type="smallBold" style={styles.aiButtonText}>
-            {processing
-              ? 'AI busy, retrying…'
-              : contact.aiStatus === 'error'
-                ? `Retry (${contact.aiError ?? 'failed'})`
-                : '✨ Process with AI'}
-          </ThemedText>
-        </Pressable>
+        <>
+          {contact.aiStatus === 'error' && <AiErrorNotice error={contact.aiError} />}
+          <Pressable
+            onPress={() => onProcess(contact)}
+            disabled={processing}
+            style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}>
+            <ThemedText type="smallBold" style={styles.aiButtonText}>
+              {processing
+                ? 'AI busy, retrying…'
+                : contact.aiStatus === 'error'
+                  ? 'Retry'
+                  : '✨ Process with AI'}
+            </ThemedText>
+          </Pressable>
+        </>
       )}
 
       <ThemedText type="smallBold" style={styles.sectionSpacing}>
@@ -238,7 +243,7 @@ export default function EventDashboardScreen() {
     } catch (error) {
       Alert.alert(
         "Couldn't process with AI",
-        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        describeAiError(error instanceof Error ? error.message : undefined).headline,
       );
     } finally {
       setProcessingId(null);
@@ -272,7 +277,7 @@ export default function EventDashboardScreen() {
     } catch (error) {
       Alert.alert(
         "Couldn't draft a follow-up",
-        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        describeAiError(error instanceof Error ? error.message : undefined).headline,
       );
     } finally {
       setGeneratingId(null);

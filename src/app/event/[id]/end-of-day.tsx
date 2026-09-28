@@ -8,6 +8,7 @@ import { LoadingView } from '@/components/loading-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { describeAiError } from '@/lib/ai-errors';
 import {
   generateFollowup,
   getActionItemsForContacts,
@@ -81,7 +82,7 @@ export default function EndOfDayScreen() {
     } catch (error) {
       Alert.alert(
         "Couldn't draft a follow-up",
-        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        describeAiError(error instanceof Error ? error.message : undefined).headline,
       );
     } finally {
       setGeneratingId(null);

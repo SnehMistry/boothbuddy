@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
+import { AiErrorNotice } from '@/components/ai-error-notice';
 import { LoadingView } from '@/components/loading-view';
 import { PhotoPicker } from '@/components/photo-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { describeAiError } from '@/lib/ai-errors';
 import {
   addPhotoToContact,
   getActionItemsForContact,
@@ -138,7 +140,7 @@ export default function ContactDetailScreen() {
     } catch (error) {
       Alert.alert(
         "Couldn't process with AI",
-        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        describeAiError(error instanceof Error ? error.message : undefined).headline,
       );
       await loadAll(contact.id);
     } finally {
@@ -185,9 +187,7 @@ export default function ContactDetailScreen() {
           </ThemedText>
         ) : contact.aiStatus === 'error' ? (
           <>
-            <ThemedText type="small" themeColor="textSecondary">
-              ⚠️ AI processing failed: {contact.aiError ?? 'Unknown error'}
-            </ThemedText>
+            <AiErrorNotice error={contact.aiError} />
             <Pressable
               onPress={handleProcess}
               disabled={processing}

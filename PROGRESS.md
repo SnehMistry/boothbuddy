@@ -3,6 +3,47 @@
 Working log for picking this project back up. See `README.md` for the
 overall roadmap and `PROMPT.md` for detailed feature specs.
 
+## 2026-09-27 — first real signal from Gemini
+
+User tested on-device: the API key works and the pipeline reaches Gemini
+(the first actual confirmation of that, after building Phases 3-4 blind).
+The failure mode was `Gemini 503: This model is currently experiencing
+high demand` (`UNAVAILABLE`) — the model itself being overloaded, not a
+key/auth/schema problem, which is a good sign for everything built so far.
+
+**Fix, in `_shared/gemini.ts`** (shared by both Edge Functions, so one
+change covers both):
+- 503 is now retried with backoff exactly like 429 (`isRetryableStatus`).
+- If a model is still 429/503 after exhausting its own retries, falls
+  back once to a concrete lighter model, `gemini-3.5-flash-lite` — not a
+  guessed `-latest` alias; confirmed via docs that only
+  `gemini-flash-latest` is documented as an existing alias, so a lite
+  "-latest" alias would have been a guess. Fallback only triggers for
+  429/503 — a different error type (bad request, empty response) skips
+  it, since switching models wouldn't fix those and doing it anyway would
+  just obscure the real error.
+- Exhausting retries on *both* models throws a new `AiBusyError`, whose
+  message is pre-split into a friendly headline and a `\n\nDetails: `
+  section — see `src/lib/ai-errors.ts`'s `describeAiError()`, which every
+  UI error display now goes through instead of showing `ai_error`/
+  `error.message` raw. `src/components/ai-error-notice.tsx` renders the
+  headline plainly with the detail behind a tap-to-expand "Show details"
+  (React Native has no `<details>` element) — wired into `contact/[id]`'s
+  and the web dashboard's error states; Alert popups show the headline
+  only, since a modal isn't a great place for a long technical string.
+- Retry/backoff constants tuned to roughly "a few attempts over about a
+  minute" per model (3 retries, 3s base delay, exponential) — loosely
+  budgeted, not scientifically tuned to a specific edge function
+  wall-clock timeout, since research alone can already chain grounded →
+  ungrounded → each with primary → fallback in the worst case. Noted as a
+  real trade-off in the code comments rather than solved rigorously.
+
+Both functions redeployed. Not independently re-verified against a live
+503 (would need the same on-device round trip) — this is a direct,
+mechanical response to the exact error the user pasted, not a fresh
+guess, so confidence is reasonably high, but flagging that it's untested
+by me specifically.
+
 ## Autonomous run — 2026-09-28
 
 User asked for the rest of the project (Phase 3 verification through
