@@ -9,54 +9,7 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
-export const Colors = {
-  light: {
-    background: '#F5F6F9', // app canvas — not stark white, gives cards somewhere to sit
-    surface: '#FFFFFF', // card / sheet backgrounds
-    surfaceMuted: '#EEF0F4', // tags, secondary surfaces, table header rows
-    border: '#E1E4EA',
-    text: '#161A22',
-    textMuted: '#666C7A',
-    accent: '#3C87F7',
-    accentMuted: '#E9F1FE',
-    success: '#1E8E5A',
-    successMuted: '#E7F6EE',
-    warning: '#B4740E',
-    warningMuted: '#FCF1DC',
-    danger: '#D0473E',
-    dangerMuted: '#FBEAE9',
-    hot: '#D0473E',
-    hotMuted: '#FBEAE9',
-    warm: '#B4740E',
-    warmMuted: '#FCF1DC',
-    cold: '#3C87F7',
-    coldMuted: '#E9F1FE',
-  },
-  dark: {
-    background: '#0C0E13',
-    surface: '#171A21',
-    surfaceMuted: '#1F232C',
-    border: '#2B303B',
-    text: '#F1F2F5',
-    textMuted: '#9BA1AF',
-    accent: '#5B9DFA',
-    accentMuted: '#17243B',
-    success: '#3FBE7E',
-    successMuted: '#123423',
-    warning: '#E3A73E',
-    warningMuted: '#332708',
-    danger: '#F0685F',
-    dangerMuted: '#3A1917',
-    hot: '#F0685F',
-    hotMuted: '#3A1917',
-    warm: '#E3A73E',
-    warmMuted: '#332708',
-    cold: '#5B9DFA',
-    coldMuted: '#17243B',
-  },
-} as const;
-
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export { Colors, type ThemeColor } from '@/constants/colors';
 
 export const Fonts = Platform.select({
   ios: {

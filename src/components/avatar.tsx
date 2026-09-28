@@ -20,7 +20,7 @@ export function Avatar({ name, size = 40 }: { name: string; size?: number }) {
         styles.circle,
         { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.accentMuted },
       ]}>
-      <ThemedText type="label" themeColor="accent" style={{ fontSize: size * 0.36 }}>
+      <ThemedText type="label" themeColor="accentStrong" style={{ fontSize: size * 0.36 }}>
         {initialsFor(name || '?')}
       </ThemedText>
     </View>

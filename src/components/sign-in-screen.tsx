@@ -156,7 +156,7 @@ export function SignInScreen() {
             </View>
 
             {!!error && (
-              <ThemedText type="body" themeColor="danger" style={styles.errorText}>
+              <ThemedText type="body" themeColor="dangerStrong" style={styles.errorText}>
                 {error}
               </ThemedText>
             )}

@@ -1,4 +1,4 @@
-import { displayUrl } from './url';
+import { displayUrl, stripTrackingParams } from './url';
 
 describe('displayUrl', () => {
   it('strips protocol and www.', () => {
@@ -17,5 +17,27 @@ describe('displayUrl', () => {
 
   it('falls back to the raw string for an unparseable URL', () => {
     expect(displayUrl('not a url')).toBe('not a url');
+  });
+});
+
+describe('stripTrackingParams', () => {
+  it('removes utm_ params but keeps real query params and the path', () => {
+    expect(
+      stripTrackingParams('https://jobs.baesystems.com/roles?ref=career-fair&utm_source=linkedin&utm_medium=share'),
+    ).toBe('https://jobs.baesystems.com/roles?ref=career-fair');
+  });
+
+  it('drops the whole query string when only tracking params were present', () => {
+    expect(stripTrackingParams('https://example.com/careers?utm_source=linkedin')).toBe(
+      'https://example.com/careers',
+    );
+  });
+
+  it('leaves a URL with no tracking params unchanged', () => {
+    expect(stripTrackingParams('https://example.com/careers')).toBe('https://example.com/careers');
+  });
+
+  it('falls back to the raw string for an unparseable URL', () => {
+    expect(stripTrackingParams('not a url')).toBe('not a url');
   });
 });

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { haptics } from '@/lib/haptics';
+import { openExternalLink } from '@/lib/links';
 import { FOLLOWUP_TONES, type Contact, type FollowupStatus, type FollowupTone } from '@/lib/types';
 
 const STATUS_LABELS: Record<FollowupStatus, string> = {
@@ -27,18 +28,6 @@ export function linkedInUrlFor(contact: Contact): string {
   if (contact.linkedinUrl) return contact.linkedinUrl;
   const query = [contact.name, contact.company].filter(Boolean).join(' ');
   return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(query)}`;
-}
-
-// On web this opens in a new tab (so the dashboard stays put behind it);
-// on native there's no tab concept, so it's just the normal external-link
-// handoff.
-function openExternalLink(url: string) {
-  if (Platform.OS === 'web') {
-    const opened = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!opened) Linking.openURL(url); // popup blocked — fall back to same-tab nav
-    return;
-  }
-  Linking.openURL(url);
 }
 
 // Gmail's compose URL pre-fills recipient/subject/body without needing any
@@ -97,7 +86,7 @@ function DraftField({
         </ThemedText>
         <Pressable onPress={onCopy} style={styles.copyButton} hitSlop={6}>
           <Ionicons name="copy-outline" size={14} color={theme.accent} />
-          <ThemedText type="link" themeColor="accent">
+          <ThemedText type="link" themeColor="accentStrong">
             Copy
           </ThemedText>
         </Pressable>
@@ -199,14 +188,14 @@ export function FollowupCard({
         />
         <Pressable onPress={() => openExternalLink(linkedInUrlFor(contact))} style={styles.linkAction}>
           <Ionicons name="logo-linkedin" size={16} color={theme.accent} />
-          <ThemedText type="link" themeColor="accent">
+          <ThemedText type="link" themeColor="accentStrong">
             Open LinkedIn
           </ThemedText>
         </Pressable>
         {Platform.OS === 'web' && !!contact.email && !!contact.emailDraft && (
           <Pressable onPress={() => openInGmail(contact)} style={styles.linkAction}>
             <Ionicons name="mail-outline" size={16} color={theme.accent} />
-            <ThemedText type="link" themeColor="accent">
+            <ThemedText type="link" themeColor="accentStrong">
               Open in Gmail
             </ThemedText>
           </Pressable>

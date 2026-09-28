@@ -6,15 +6,19 @@ import { useTheme } from '@/hooks/use-theme';
 
 export type BadgeTone = 'hot' | 'warm' | 'cold' | 'accent' | 'success' | 'warning' | 'danger' | 'neutral';
 
-const TONE_COLOR: Record<BadgeTone, { fg: ThemeColor; bg: ThemeColor }> = {
-  hot: { fg: 'hot', bg: 'hotMuted' },
-  warm: { fg: 'warm', bg: 'warmMuted' },
-  cold: { fg: 'cold', bg: 'coldMuted' },
-  accent: { fg: 'accent', bg: 'accentMuted' },
-  success: { fg: 'success', bg: 'successMuted' },
-  warning: { fg: 'warning', bg: 'warningMuted' },
-  danger: { fg: 'danger', bg: 'dangerMuted' },
-  neutral: { fg: 'textMuted', bg: 'surfaceMuted' },
+// `text` is a slightly darker (light-mode only) shade of the same hue than
+// `icon` — see the "*Strong" tokens in constants/colors.ts. Small label
+// text needs 4.5:1 against its own muted background; a badge's icon (if
+// any) or border only needs 3:1, so it can stay the more vivid base tone.
+const TONE_COLOR: Record<BadgeTone, { text: ThemeColor; bg: ThemeColor }> = {
+  hot: { text: 'hotStrong', bg: 'hotMuted' },
+  warm: { text: 'warmStrong', bg: 'warmMuted' },
+  cold: { text: 'coldStrong', bg: 'coldMuted' },
+  accent: { text: 'accentStrong', bg: 'accentMuted' },
+  success: { text: 'successStrong', bg: 'successMuted' },
+  warning: { text: 'warningStrong', bg: 'warningMuted' },
+  danger: { text: 'dangerStrong', bg: 'dangerMuted' },
+  neutral: { text: 'textMuted', bg: 'surfaceMuted' },
 };
 
 // A colored status pill — interest level (Hot/Warm/Cold), AI status,
@@ -22,11 +26,11 @@ const TONE_COLOR: Record<BadgeTone, { fg: ThemeColor; bg: ThemeColor }> = {
 // too), just a fast visual read.
 export function Badge({ label, tone = 'neutral' }: { label: string; tone?: BadgeTone }) {
   const theme = useTheme();
-  const { fg, bg } = TONE_COLOR[tone];
+  const { text, bg } = TONE_COLOR[tone];
 
   return (
     <View style={[styles.badge, { backgroundColor: theme[bg] }]}>
-      <ThemedText type="label" themeColor={fg}>
+      <ThemedText type="label" themeColor={text}>
         {label}
       </ThemedText>
     </View>

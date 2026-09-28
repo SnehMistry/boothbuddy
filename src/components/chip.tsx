@@ -21,7 +21,7 @@ export function Chip({
 }) {
   const theme = useTheme();
   const content = (
-    <ThemedText type="label" themeColor={selected ? 'accent' : 'textMuted'}>
+    <ThemedText type="label" themeColor={selected ? 'accentStrong' : 'textMuted'}>
       {label}
     </ThemedText>
   );

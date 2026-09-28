@@ -27,7 +27,13 @@ export function Card({
 
   if (onPress) {
     return (
-      <Pressable onPress={onPress} style={({ pressed }) => [cardStyle, pressed && styles.pressed]}>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+          cardStyle,
+          hovered && !pressed && { borderColor: theme.accent },
+          pressed && styles.pressed,
+        ]}>
         {children}
       </Pressable>
     );

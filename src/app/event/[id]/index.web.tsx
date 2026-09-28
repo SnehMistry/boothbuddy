@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
@@ -15,12 +15,13 @@ import { InterestBadge, InterestPicker } from '@/components/interest-picker';
 import { LoadingView } from '@/components/loading-view';
 import { ThemedText } from '@/components/themed-text';
 import { Toast, useToast } from '@/components/toast';
-import { Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filter';
 import { useTheme } from '@/hooks/use-theme';
 import { confirmAction } from '@/lib/confirm';
 import { isDueWithinDays } from '@/lib/deadlines';
 import { describeAiError } from '@/lib/ai-errors';
+import { formatDateTime, formatHumanDate } from '@/lib/dates';
 import {
   deleteContact,
   deleteEvent,
@@ -39,10 +40,6 @@ import {
   type FollowupTone,
   type InterestLevel,
 } from '@/lib/types';
-
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 const INTEREST_FILTER_LABELS: Record<InterestFilter, string> = {
   all: 'All',
@@ -69,6 +66,7 @@ function ContactDetailPanel({
   onInterestChange,
   onMatchStatus,
   onDelete,
+  onBack,
 }: {
   contact: Contact;
   processing: boolean;
@@ -80,11 +78,20 @@ function ContactDetailPanel({
   onInterestChange: (contact: Contact, level: InterestLevel) => void;
   onMatchStatus: (contact: Contact, status: 'confirmed' | 'rejected') => void;
   onDelete: (contact: Contact) => void;
+  onBack?: () => void;
 }) {
   const theme = useTheme();
 
   return (
     <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
+      {onBack && (
+        <Pressable onPress={onBack} style={styles.backRow}>
+          <Ionicons name="arrow-back" size={16} color={theme.accent} />
+          <ThemedText type="link" themeColor="accentStrong">
+            Back to contacts
+          </ThemedText>
+        </Pressable>
+      )}
       <View style={styles.panelHeader}>
         <Avatar name={contact.name || '?'} size={48} />
         <View style={styles.flexShrink}>
@@ -97,8 +104,9 @@ function ContactDetailPanel({
           </ThemedText>
         </View>
       </View>
+      {!!contact.companyUrl && <ExternalLinkRow url={contact.companyUrl} variant="chip" />}
       <Pressable onPress={() => router.push(`/contact/${contact.id}`)}>
-        <ThemedText type="link" themeColor="accent">
+        <ThemedText type="link" themeColor="accentStrong">
           Edit notes, photos & raw details →
         </ThemedText>
       </Pressable>
@@ -133,7 +141,7 @@ function ContactDetailPanel({
                 <Ionicons name="time-outline" size={12} /> Deadlines
               </ThemedText>
               {contact.deadlines.map((deadline, i) => (
-                <Badge key={i} label={deadline} tone="warning" />
+                <Badge key={i} label={formatHumanDate(deadline)} tone="warning" />
               ))}
             </View>
           )}
@@ -219,6 +227,8 @@ export default function EventDashboardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 768;
   const [event, setEvent] = useState<BoothEvent | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [dueThisWeek, setDueThisWeek] = useState(0);
@@ -368,30 +378,39 @@ export default function EventDashboardScreen() {
     (c) => c.followupStatus === 'sent' || c.followupStatus === 'replied',
   ).length;
 
+  const showList = !isNarrow || !selected;
+  const showDetail = !isNarrow || !!selected;
+
   return (
-    <View style={styles.root}>
-      <View style={[styles.tableColumn, { borderRightColor: theme.border }]}>
+    <View style={[styles.root, isNarrow && styles.rootNarrow]}>
+      {showList && (
+      <View
+        style={[
+          styles.tableColumn,
+          { borderRightColor: theme.border },
+          isNarrow && styles.tableColumnNarrow,
+        ]}>
         <View style={styles.toolbar}>
           <ThemedText type="caption" themeColor="textMuted">
-            {event.date}
+            {formatHumanDate(event.date)}
             {event.location ? ` · ${event.location}` : ''}
           </ThemedText>
           <View style={styles.toolbarButtons}>
             <Pressable onPress={() => router.push(`/event/${id}/new-contact`)} style={styles.toolbarLink}>
               <Ionicons name="add-circle-outline" size={15} color={theme.accent} />
-              <ThemedText type="link" themeColor="accent">
+              <ThemedText type="link" themeColor="accentStrong">
                 New Contact
               </ThemedText>
             </Pressable>
             <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)} style={styles.toolbarLink}>
               <Ionicons name="moon-outline" size={15} color={theme.accent} />
-              <ThemedText type="link" themeColor="accent">
+              <ThemedText type="link" themeColor="accentStrong">
                 End of Day
               </ThemedText>
             </Pressable>
             <Pressable onPress={handleDeleteEvent} style={styles.toolbarLink}>
               <Ionicons name="trash-outline" size={15} color={theme.danger} />
-              <ThemedText type="link" themeColor="danger">
+              <ThemedText type="link" themeColor="dangerStrong">
                 Delete
               </ThemedText>
             </Pressable>
@@ -456,9 +475,11 @@ export default function EventDashboardScreen() {
               <Pressable
                 key={contact.id}
                 onPress={() => setSelectedId(contact.id)}
-                style={[
+                style={({ hovered }: { hovered?: boolean }) => [
                   styles.tableRow,
-                  selectedId === contact.id && { backgroundColor: theme.accentMuted },
+                  selectedId === contact.id
+                    ? { backgroundColor: theme.accentMuted }
+                    : hovered && { backgroundColor: theme.surfaceMuted },
                 ]}>
                 <Avatar name={contact.name || '?'} size={32} />
                 <View style={styles.colName}>
@@ -476,8 +497,9 @@ export default function EventDashboardScreen() {
           </ScrollView>
         )}
       </View>
+      )}
 
-      {selected ? (
+      {showDetail && (selected ? (
         <ContactDetailPanel
           contact={selected}
           processing={processingId === selected.id}
@@ -489,6 +511,7 @@ export default function EventDashboardScreen() {
           onInterestChange={handleInterestChange}
           onMatchStatus={handleMatchStatus}
           onDelete={handleDeleteContact}
+          onBack={isNarrow ? () => setSelectedId(null) : undefined}
         />
       ) : (
         <View style={styles.panelEmpty}>
@@ -497,7 +520,7 @@ export default function EventDashboardScreen() {
             Select a contact to review their card and draft a follow-up.
           </ThemedText>
         </View>
-      )}
+      ))}
       <Toast message={toastMessage} />
     </View>
   );
@@ -508,11 +531,24 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
   },
+  rootNarrow: {
+    flexDirection: 'column',
+  },
   tableColumn: {
     width: 420,
     padding: Spacing.three,
     gap: Spacing.two,
     borderRightWidth: 1,
+  },
+  tableColumnNarrow: {
+    width: '100%',
+    borderRightWidth: 0,
+  },
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: Spacing.one,
   },
   toolbar: {
     gap: Spacing.one,
@@ -574,7 +610,9 @@ const styles = StyleSheet.create({
   panelContent: {
     padding: Spacing.four,
     gap: Spacing.two,
-    maxWidth: 640,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
   panelHeader: {
     flexDirection: 'row',

@@ -55,6 +55,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
+    "check-contrast": "node scripts/check-contrast.mjs",
     "predeploy": "expo export -p web && cp dist/index.html dist/404.html",
     "deploy": "gh-pages --nojekyll -d dist"
   },

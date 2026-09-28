@@ -92,7 +92,7 @@ export function ChangePasswordModal({ visible, onClose }: { visible: boolean; on
           />
 
           {!!error && (
-            <ThemedText type="body" themeColor="danger" style={styles.error}>
+            <ThemedText type="body" themeColor="dangerStrong" style={styles.error}>
               {error}
             </ThemedText>
           )}

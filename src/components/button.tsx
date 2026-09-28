@@ -50,11 +50,12 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
-      style={({ pressed }) => [
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         styles.button,
         { backgroundColor },
         variant === 'ghost' && styles.ghostPadding,
         isDisabled && styles.disabled,
+        hovered && !isDisabled && !pressed && styles.hovered,
         pressed && !isDisabled && styles.pressed,
         style,
       ]}>
@@ -89,6 +90,9 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.5,
+  },
+  hovered: {
+    opacity: 0.9,
   },
   pressed: {
     opacity: 0.85,

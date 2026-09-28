@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { AiErrorNotice } from '@/components/ai-error-notice';
 import { Badge } from '@/components/badge';
@@ -9,6 +9,7 @@ import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Checkbox } from '@/components/checkbox';
 import { Chip } from '@/components/chip';
+import { Divider } from '@/components/divider';
 import { ExternalLinkRow } from '@/components/external-link-row';
 import { InterestPicker } from '@/components/interest-picker';
 import { LoadingView } from '@/components/loading-view';
@@ -18,6 +19,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { describeAiError } from '@/lib/ai-errors';
 import { confirmAction } from '@/lib/confirm';
+import { formatDateTime, formatHumanDate } from '@/lib/dates';
 import {
   addPhotoToContact,
   deleteContact,
@@ -32,14 +34,8 @@ import {
   setResearchMatchStatus,
   updateContact,
 } from '@/lib/storage';
+import { stripTrackingParams } from '@/lib/url';
 import type { ActionItem, Contact, ContactPhoto, InterestLevel, JobOpportunity, PhotoLabel } from '@/lib/types';
-
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-}
 
 export default function ContactDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -94,9 +90,10 @@ export default function ContactDetailScreen() {
   };
 
   const saveCompanyUrl = async () => {
-    const trimmed = companyUrl.trim();
-    if (!contact || trimmed === (contact.companyUrl ?? '')) return;
-    const updated = await updateContact(contact.id, { companyUrl: trimmed || undefined });
+    const cleaned = stripTrackingParams(companyUrl.trim());
+    setCompanyUrl(cleaned);
+    if (!contact || cleaned === (contact.companyUrl ?? '')) return;
+    const updated = await updateContact(contact.id, { companyUrl: cleaned || undefined });
     if (updated) setContact(updated);
   };
 
@@ -204,6 +201,15 @@ export default function ContactDetailScreen() {
 
   return (
     <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.container}>
+      <Stack.Screen
+        options={{
+          title: contact.name
+            ? contact.company
+              ? `${contact.name} · ${contact.company}`
+              : contact.name
+            : 'Contact',
+        }}
+      />
       <View style={styles.timestampRow}>
         <Ionicons name="time-outline" size={13} color={theme.textMuted} />
         <ThemedText type="caption" themeColor="textMuted">
@@ -222,7 +228,7 @@ export default function ContactDetailScreen() {
         {contact.aiStatus === 'processing' ? (
           <View style={styles.statusRow}>
             <Ionicons name="sparkles" size={16} color={theme.accent} />
-            <ThemedText type="body" themeColor="accent" style={styles.flexShrink}>
+            <ThemedText type="body" themeColor="accentStrong" style={styles.flexShrink}>
               AI is processing this contact — this can take up to a minute on the free tier…
             </ThemedText>
           </View>
@@ -248,174 +254,211 @@ export default function ContactDetailScreen() {
         )}
       </View>
 
-      {hasCard && (
+      {(hasCard || !!actionItems.length || !!jobs.length || !!contact.research) && (
         <Card style={styles.aiCard}>
-          {(contact.title || contact.company) && (
-            <ThemedText type="heading">
-              {[contact.title, contact.company].filter(Boolean).join(' at ')}
-            </ThemedText>
-          )}
-
-          <InterestPicker value={contact.interestLevel} onChange={setInterestLevel} />
-
-          {!!contact.summary && <ThemedText type="body">{contact.summary}</ThemedText>}
-
-          {!!contact.topics?.length && (
-            <View style={styles.chipRow}>
-              {contact.topics.map((topic) => (
-                <Chip key={topic} label={topic} />
-              ))}
-            </View>
-          )}
-
-          {!!contact.rolesMentioned?.length && (
+          {hasCard && (
             <View style={styles.cardSection}>
-              <View style={styles.sectionLabelRow}>
-                <Ionicons name="briefcase-outline" size={14} color={theme.textMuted} />
-                <ThemedText type="label" themeColor="textMuted">
-                  Roles / opportunities mentioned
+              {(contact.title || contact.company) && (
+                <ThemedText type="heading">
+                  {[contact.title, contact.company].filter(Boolean).join(' at ')}
                 </ThemedText>
-              </View>
-              {contact.rolesMentioned.map((role, i) => (
-                <ThemedText key={i} type="body">
-                  • {role}
-                </ThemedText>
-              ))}
-            </View>
-          )}
-
-          {!!contact.deadlines?.length && (
-            <View style={styles.cardSection}>
-              <View style={styles.sectionLabelRow}>
-                <Ionicons name="time-outline" size={14} color={theme.textMuted} />
-                <ThemedText type="label" themeColor="textMuted">
-                  Deadlines mentioned
-                </ThemedText>
-              </View>
-              <View style={styles.chipRow}>
-                {contact.deadlines.map((deadline, i) => (
-                  <Badge key={i} label={deadline} tone="warning" />
-                ))}
-              </View>
-            </View>
-          )}
-
-          {!!contact.memorable && (
-            <View style={styles.cardSection}>
-              <View style={styles.sectionLabelRow}>
-                <Ionicons name="heart-outline" size={14} color={theme.textMuted} />
-                <ThemedText type="label" themeColor="textMuted">
-                  Memorable
-                </ThemedText>
-              </View>
-              <ThemedText type="body">{contact.memorable}</ThemedText>
-            </View>
-          )}
-
-          {!!contact.email && <ExternalLinkRow url={`mailto:${contact.email}`} label={contact.email} />}
-          {!!contact.linkedinUrl && <ExternalLinkRow url={contact.linkedinUrl} />}
-        </Card>
-      )}
-
-      {!!actionItems.length && (
-        <View style={styles.sectionSpacing}>
-          <ThemedText type="title">Action items</ThemedText>
-          <Card>
-            {actionItems.map((item) => (
-              <Checkbox key={item.id} label={item.text} checked={item.done} onPress={() => toggleActionItem(item)} />
-            ))}
-          </Card>
-        </View>
-      )}
-
-      {!!jobs.length && (
-        <View style={styles.sectionSpacing}>
-          <ThemedText type="title">Jobs found</ThemedText>
-          <Card>
-            {jobs.map((job) => (
-              <View key={job.id} style={styles.jobRow}>
-                <View style={styles.flexShrink}>
-                  <Checkbox label={job.title} checked={job.applied} onPress={() => toggleJobApplied(job)} />
-                  {!!job.deadline && (
-                    <View style={styles.jobDeadline}>
-                      <Badge label={`Due ${job.deadline}`} tone="warning" />
-                    </View>
-                  )}
-                </View>
-                {!!job.url && <ExternalLinkRow url={job.url} label="Open" />}
-              </View>
-            ))}
-          </Card>
-        </View>
-      )}
-
-      {!!contact.research && (
-        <Card style={styles.researchCard}>
-          <Pressable
-            onPress={() => setResearchExpanded((v) => !v)}
-            style={styles.researchHeader}>
-            <ThemedText type="heading">Research</ThemedText>
-            <View style={styles.researchHeaderRight}>
-              <Badge
-                label={contact.research.grounded ? 'Live-searched' : "AI's knowledge only"}
-                tone={contact.research.grounded ? 'success' : 'neutral'}
-              />
-              <Ionicons
-                name={researchExpanded ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={theme.textMuted}
-              />
-            </View>
-          </Pressable>
-
-          {researchExpanded && (
-            <>
-              {!!contact.research.person.summary && (
-                <View style={styles.cardSection}>
-                  <View style={styles.sectionLabelRow}>
-                    <ThemedText type="label" themeColor="textMuted">
-                      About {contact.name}
-                    </ThemedText>
-                    <Badge
-                      label={contact.research.person.confidence === 'high' ? 'High confidence' : 'Low confidence'}
-                      tone={contact.research.person.confidence === 'high' ? 'success' : 'warning'}
-                    />
-                  </View>
-                  <ThemedText type="body">{contact.research.person.summary}</ThemedText>
-                </View>
               )}
 
-              {!!contact.research.company.summary && (
-                <View style={styles.cardSection}>
-                  <ThemedText type="label" themeColor="textMuted">
-                    About the company
-                  </ThemedText>
-                  <ThemedText type="body">{contact.research.company.summary}</ThemedText>
-                </View>
-              )}
+              <InterestPicker value={contact.interestLevel} onChange={setInterestLevel} />
 
-              {!!contact.research.sources.length && (
-                <View style={styles.cardSection}>
-                  <ThemedText type="label" themeColor="textMuted">
-                    Sources
-                  </ThemedText>
-                  {contact.research.sources.map((source) => (
-                    <ExternalLinkRow key={source.url} url={source.url} label={source.title || undefined} />
+              {!!contact.summary && <ThemedText type="body">{contact.summary}</ThemedText>}
+
+              {!!contact.topics?.length && (
+                <View style={styles.chipRow}>
+                  {contact.topics.map((topic) => (
+                    <Chip key={topic} label={topic} />
                   ))}
                 </View>
               )}
 
-              {contact.research.matchStatus === 'unconfirmed' ? (
-                <View style={styles.chipRow}>
-                  <Button label="This is them" icon="checkmark" onPress={() => handleMatchStatus('confirmed')} />
-                  <Button label="Wrong person" variant="secondary" onPress={() => handleMatchStatus('rejected')} />
+              {!!contact.rolesMentioned?.length && (
+                <View style={styles.cardSection}>
+                  <View style={styles.labelRow}>
+                    <Ionicons name="briefcase-outline" size={14} color={theme.textMuted} />
+                    <ThemedText type="label" themeColor="textMuted">
+                      Roles / opportunities mentioned
+                    </ThemedText>
+                  </View>
+                  {contact.rolesMentioned.map((role, i) => (
+                    <ThemedText key={i} type="body">
+                      • {role}
+                    </ThemedText>
+                  ))}
                 </View>
-              ) : (
-                <Badge
-                  label={contact.research.matchStatus === 'confirmed' ? 'Match confirmed' : 'Match rejected'}
-                  tone={contact.research.matchStatus === 'confirmed' ? 'success' : 'neutral'}
-                />
               )}
+
+              {!!contact.deadlines?.length && (
+                <View style={styles.cardSection}>
+                  <View style={styles.labelRow}>
+                    <Ionicons name="time-outline" size={14} color={theme.textMuted} />
+                    <ThemedText type="label" themeColor="textMuted">
+                      Deadlines mentioned
+                    </ThemedText>
+                  </View>
+                  <View style={styles.chipRow}>
+                    {contact.deadlines.map((deadline, i) => (
+                      <Badge key={i} label={formatHumanDate(deadline)} tone="warning" />
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {!!contact.memorable && (
+                <View style={styles.cardSection}>
+                  <View style={styles.labelRow}>
+                    <Ionicons name="heart-outline" size={14} color={theme.textMuted} />
+                    <ThemedText type="label" themeColor="textMuted">
+                      Memorable
+                    </ThemedText>
+                  </View>
+                  <ThemedText type="body">{contact.memorable}</ThemedText>
+                </View>
+              )}
+
+              {!!contact.email && <ExternalLinkRow url={`mailto:${contact.email}`} label={contact.email} />}
+              {!!contact.linkedinUrl && <ExternalLinkRow url={contact.linkedinUrl} />}
+            </View>
+          )}
+
+          {!!actionItems.length && (
+            <>
+              {hasCard && <Divider style={styles.divider} />}
+              <View style={styles.cardSection}>
+                <View style={styles.labelRow}>
+                  <Ionicons name="checkbox-outline" size={14} color={theme.textMuted} />
+                  <ThemedText type="label" themeColor="textMuted">
+                    Action items
+                  </ThemedText>
+                </View>
+                {actionItems.map((item) => (
+                  <Checkbox
+                    key={item.id}
+                    label={item.text}
+                    checked={item.done}
+                    onPress={() => toggleActionItem(item)}
+                  />
+                ))}
+              </View>
+            </>
+          )}
+
+          {!!jobs.length && (
+            <>
+              {(hasCard || !!actionItems.length) && <Divider style={styles.divider} />}
+              <View style={styles.cardSection}>
+                <View style={styles.labelRow}>
+                  <Ionicons name="briefcase-outline" size={14} color={theme.textMuted} />
+                  <ThemedText type="label" themeColor="textMuted">
+                    Jobs found
+                  </ThemedText>
+                </View>
+                {jobs.map((job) => (
+                  <View key={job.id} style={styles.jobRow}>
+                    <View style={styles.flexShrink}>
+                      <Checkbox label={job.title} checked={job.applied} onPress={() => toggleJobApplied(job)} />
+                      {!!job.deadline && (
+                        <View style={styles.jobDeadline}>
+                          <Badge label={`Due ${formatHumanDate(job.deadline)}`} tone="warning" />
+                        </View>
+                      )}
+                    </View>
+                    {!!job.url && <ExternalLinkRow url={job.url} label="Open" />}
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {!!contact.research && (
+            <>
+              {(hasCard || !!actionItems.length || !!jobs.length) && <Divider style={styles.divider} />}
+              <View style={styles.cardSection}>
+                <Pressable onPress={() => setResearchExpanded((v) => !v)} style={styles.researchHeader}>
+                  <View style={styles.labelRow}>
+                    <Ionicons name="search-outline" size={14} color={theme.textMuted} />
+                    <ThemedText type="label" themeColor="textMuted">
+                      Research
+                    </ThemedText>
+                  </View>
+                  <View style={styles.researchHeaderRight}>
+                    <Badge
+                      label={contact.research.grounded ? 'Live-searched' : "AI's knowledge only"}
+                      tone={contact.research.grounded ? 'success' : 'neutral'}
+                    />
+                    <Ionicons
+                      name={researchExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={theme.textMuted}
+                    />
+                  </View>
+                </Pressable>
+
+                {researchExpanded && (
+                  <>
+                    {!!contact.research.person.summary && (
+                      <View style={styles.cardSection}>
+                        <View style={styles.labelRowBetween}>
+                          <ThemedText type="label" themeColor="textMuted">
+                            About {contact.name}
+                          </ThemedText>
+                          <Badge
+                            label={
+                              contact.research.person.confidence === 'high' ? 'High confidence' : 'Low confidence'
+                            }
+                            tone={contact.research.person.confidence === 'high' ? 'success' : 'warning'}
+                          />
+                        </View>
+                        <ThemedText type="body">{contact.research.person.summary}</ThemedText>
+                      </View>
+                    )}
+
+                    {!!contact.research.company.summary && (
+                      <View style={styles.cardSection}>
+                        <ThemedText type="label" themeColor="textMuted">
+                          About the company
+                        </ThemedText>
+                        <ThemedText type="body">{contact.research.company.summary}</ThemedText>
+                      </View>
+                    )}
+
+                    {!!contact.research.sources.length && (
+                      <View style={styles.cardSection}>
+                        <ThemedText type="label" themeColor="textMuted">
+                          Sources
+                        </ThemedText>
+                        {contact.research.sources.map((source) => (
+                          <ExternalLinkRow key={source.url} url={source.url} label={source.title || undefined} />
+                        ))}
+                      </View>
+                    )}
+
+                    {contact.research.matchStatus === 'unconfirmed' ? (
+                      <View style={styles.chipRow}>
+                        <Button
+                          label="This is them"
+                          icon="checkmark"
+                          onPress={() => handleMatchStatus('confirmed')}
+                        />
+                        <Button
+                          label="Wrong person"
+                          variant="secondary"
+                          onPress={() => handleMatchStatus('rejected')}
+                        />
+                      </View>
+                    ) : (
+                      <Badge
+                        label={contact.research.matchStatus === 'confirmed' ? 'Match confirmed' : 'Match rejected'}
+                        tone={contact.research.matchStatus === 'confirmed' ? 'success' : 'neutral'}
+                      />
+                    )}
+                  </>
+                )}
+              </View>
             </>
           )}
         </Card>
@@ -474,7 +517,7 @@ export default function ContactDetailScreen() {
       />
       {!!contact.companyUrl && (
         <View style={styles.companyLinkRow}>
-          <ExternalLinkRow url={contact.companyUrl} />
+          <ExternalLinkRow url={contact.companyUrl} variant="chip" />
         </View>
       )}
 
@@ -545,7 +588,18 @@ const styles = StyleSheet.create({
   cardSection: {
     gap: Spacing.half,
   },
-  sectionLabelRow: {
+  divider: {
+    marginVertical: Spacing.three,
+  },
+  // Icon + label only — left-aligned, not spread apart.
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  // Label on the left, a badge/status on the right — the two groups are
+  // meant to sit at opposite ends.
+  labelRowBetween: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -568,9 +622,6 @@ const styles = StyleSheet.create({
   },
   flexShrink: {
     flexShrink: 1,
-  },
-  researchCard: {
-    marginTop: Spacing.three,
   },
   researchHeader: {
     flexDirection: 'row',
