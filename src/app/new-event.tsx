@@ -100,6 +100,9 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: Spacing.four,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
   fieldSpacing: {
     marginTop: Spacing.three,

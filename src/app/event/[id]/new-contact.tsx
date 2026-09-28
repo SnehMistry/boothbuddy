@@ -200,6 +200,9 @@ const styles = StyleSheet.create({
   container: {
     padding: Spacing.four,
     gap: Spacing.two,
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
   },
   sectionSpacing: {
     marginTop: Spacing.four,
