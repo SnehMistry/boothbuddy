@@ -1,7 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
+import { useEffect } from 'react';
 
 import { useTheme } from '@/hooks/use-theme';
+import { resyncReminders } from '@/lib/notifications';
+import { getEventsWithStats, getUpcomingDeadlines } from '@/lib/storage';
 
 // The phone's bottom tab bar — Events (the capture-focused home), Deadlines
 // (a cross-event view of what's coming up), and Settings. Web has no
@@ -10,6 +13,16 @@ import { useTheme } from '@/hooks/use-theme';
 // without tab chrome).
 export default function TabsLayout() {
   const theme = useTheme();
+
+  // Reminders are re-derived from scratch every time the tab bar mounts
+  // (i.e. whenever the app is opened) rather than tracked incrementally —
+  // there's no background sync on a $0, client-only project, so "resync on
+  // open" is the honest ceiling for how fresh these can be.
+  useEffect(() => {
+    Promise.all([getEventsWithStats(), getUpcomingDeadlines()])
+      .then(([events, deadlines]) => resyncReminders(events, deadlines))
+      .catch(() => {});
+  }, []);
 
   return (
     <Tabs
