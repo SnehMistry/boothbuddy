@@ -15,7 +15,7 @@ const FIELDS: {
   placeholder: string;
   multiline?: boolean;
 }[] = [
-  { key: 'school', label: 'School', placeholder: 'e.g. CSU San Marcos' },
+  { key: 'school', label: 'School', placeholder: 'e.g. State University' },
   { key: 'major', label: 'Major', placeholder: 'e.g. Computer Science' },
   { key: 'yearInSchool', label: 'Year', placeholder: 'e.g. 3rd year (junior)' },
   { key: 'graduation', label: 'Graduation date', placeholder: 'e.g. December 2027' },

@@ -3,6 +3,122 @@
 Working log for picking this project back up. See `README.md` for the
 overall roadmap and `PROMPT.md` for detailed feature specs.
 
+## 2026-09-29 (overnight) — profile, company identity, tailored jobs — ON A BRANCH, NOT DEPLOYED
+
+Implements PROMPT.md's "Profile, company identity & tailored jobs
+(2026-09-29)". **Everything is on the `profile-and-jobs` branch, pushed to
+GitHub, and not merged.** The user is using the live app at a conference
+the next day, so on their instructions: no migration was run against the
+live database, no Edge Function was deployed, the website wasn't
+redeployed, and no APK was built. `main` is untouched: the first commit
+of this work had landed on local `main` before the "use a branch"
+instruction arrived, so it was moved onto the branch and local `main` was
+reset back to `origin/main` (it had never been pushed).
+
+### What's on the branch
+1. **"⋯" More menus** (`components/more-menu.tsx`, built on `Modal` so it
+   works the same on iOS/Android/web; Esc closes it on web). Delete event
+   is in a ⋯ menu on the web table column and in the phone's event header;
+   Delete contact is in a ⋯ menu in the web panel header and the contact
+   screen's header. The big red buttons and the squeezed toolbar link are
+   gone. Every delete still asks for confirmation.
+2. **My profile**: new `profiles` table (migration
+   `20260930000000_profiles_and_job_fit.sql`, RLS "own your row"), a form
+   at the top of Settings (`components/profile-form.tsx`, one explicit Save
+   so a half-typed note never reaches the AI), and a "Profile & settings"
+   link in the web sidebar. Both Edge Functions load the profile
+   themselves through RLS (`_shared/profile.ts`), so the app never has to
+   send it along with each request.
+3. **Company identity** (process-contact's structuring call): official
+   name, one-line description, website, careers page, high/low confidence,
+   and up to 3 alternatives when the name is ambiguous. Stored in
+   `contacts.research.company` (jsonb, so no column changes).
+   `CompanyInfo` component shows it. For a low-confidence match the user
+   can tap "Yes, X" or pick an alternative; picking a *different* company
+   re-runs the AI immediately. Typing a name into the new editable Company
+   field marks it as confirmed by the user.
+4. **Tailored jobs**: research now returns up to 5 role suggestions with
+   `kind` (internship/co-op/new grad) and `fitReason` (new
+   `job_opportunities` columns), plus a sponsorship estimate. The target
+   timeline comes from the profile's graduation date
+   (`_shared/timeline.ts`: "Fall 2027 (December 2027)" → Summer 2027
+   internships + new grad starting early 2028). `JobSuggestionRow` is
+   shared by the contact screen, the web panel, and End of Day.
+5. **Refresh with my profile** replaces "Reprocess with AI": it
+   reprocesses, then redrafts the follow-up in the same tone if a draft
+   already existed. Shows a hint when the profile was saved after the
+   contact was last processed.
+6. **generate-followup** includes the profile and asks for at most one
+   natural mention of the student's situation per message.
+
+### Decisions made without asking (user was asleep)
+- **Personal profile data stays out of git.** The repo is public, so the
+  pre-filled profile (the owner's school, year, graduation date, and
+  work-authorization details) is
+  in `supabase/seeds/profile.local.sql`, which is gitignored and applied
+  with `supabase db push --include-seed`. Its insert uses `on conflict do
+  nothing`, so it never overwrites edits. `config.toml`'s seed path now
+  points at `./seeds/*.local.sql`. If this machine's copy is lost, just
+  type the profile into Settings instead.
+- **Job links are never model-supplied.** Every suggestion's `url` is the
+  company's careers page, or its homepage if no careers page checked out.
+  Next to it are two pre-filled searches (`lib/job-links.ts`): a Google
+  `site:` search of the careers host, since every careers site's own search
+  URL is different, and a LinkedIn Jobs keyword search.
+- **Model-suggested websites and careers URLs are fetched before they're
+  stored** (`_shared/urls.ts`, 6s timeout). Only a clear "doesn't exist"
+  (DNS failure, timeout, 404/410, 5xx) drops a URL. 403/429 count as
+  "exists", because many careers sites block bots. A URL the user typed or
+  scanned is never replaced.
+- **Sponsorship is one company-level estimate, not per job.** It's based on
+  the company's history, and the UI always says "— verify".
+- **Drafts don't bring up visas unprompted.** Opening a first message with
+  visa status usually hurts more than it helps, so the model is told to
+  mention work authorization only if the notes show it came up. It still
+  mentions school, year, graduation, and what the student is looking for.
+- **Research the user marked "Wrong person" is no longer fed into drafts**
+  (a gap in the original Phase 4 spec).
+- **Reprocessing is less destructive, which matters now that "Refresh" is
+  encouraged.** It no longer blanks a hand-typed LinkedIn URL, email, or
+  title when the AI returns nothing. It keeps a company the user
+  confirmed. It carries over Applied/Done checkmarks for jobs and action
+  items that come back with the same text.
+- **Known leftover:** a refresh still overwrites a hand-picked Hot/Warm/Cold
+  with the AI's suggestion, and person-match confirmation resets to
+  "unconfirmed". There's no record of whether a value was user-set, and
+  adding one wasn't worth the scope tonight.
+
+### Verified
+`npx tsc --noEmit`, `npx expo lint` (0 problems), and `npm test` (7
+suites, 40 tests, including new `job-links` and `timeline` tests) all pass.
+`npx expo export --platform web` bundles (output went to a scratch
+directory, not deployed). The Edge Functions were typechecked with
+`deno check` (via `npx deno`). The only errors are the same "`never`"
+class that `main`'s functions already have (the Supabase client has no
+generated DB types). Supabase deploys without typechecking, and this is
+how the current functions deploy fine today. Two things are not yet
+verified because they need the live stack: a real Gemini response to the
+new schema/prompts, and the UI in a browser/on the phone.
+
+### How to deploy after the conference (in this order)
+Order matters: the new functions insert into columns the migration adds.
+1. `git checkout profile-and-jobs`
+2. `supabase db push --include-seed`. This applies the migration (new
+   `profiles` table + two nullable `job_opportunities` columns; purely
+   additive, so the current app keeps working) and the local profile
+   seed. Use `--dry-run` first to preview.
+3. `supabase functions deploy process-contact` and
+   `supabase functions deploy generate-followup`. Both work with the
+   current APK and website too; those just don't show the new fields yet.
+4. Test on web locally (`npx expo start --web`), then merge:
+   `git checkout main && git merge profile-and-jobs && git push`.
+5. `npm run deploy` (web).
+6. APK: no native code changed, but the app has no over-the-air update
+   channel (`expo-updates` isn't installed), so the phone only gets the
+   new screens (⋯ menus, profile form, company picker, job links) from a
+   rebuild: `eas build --platform android --profile preview`. Until then,
+   the old APK still benefits from step 3's smarter AI.
+
 ## Final polish pass — design system overhaul + QA (part 1: design)
 
 User asked for a full portfolio-quality visual pass on both platforms plus

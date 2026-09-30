@@ -350,3 +350,34 @@ night's contacts in one place:
 - **Phase 7 (polish/deploy)**: deploy the web app free on Vercel or
   Netlify, and polish `README.md` since it's going on the user's resume —
   no other changes to Phase 7's original scope.
+
+## Profile, company identity & tailored jobs (2026-09-29)
+
+$0 budget still applies; the capture flow (new contact / save / photos)
+must not change.
+
+1. **Web/phone layout cleanup**: destructive actions move into a "⋯ More"
+   menu — event menu has Delete event, contact menu has Delete contact
+   (still confirmed). No big red Delete buttons in the contact panel/screen,
+   and no Delete link squeezed into the web event toolbar.
+2. **My profile** (Settings; also reachable from the web sidebar): school,
+   major, year, graduation date, work authorization, interests/skills —
+   editable. Every Gemini prompt (process-contact and generate-followup)
+   includes it. The owner's values are pre-filled via a gitignored seed,
+   not committed (public repo).
+3. **Company from just a name**: with no company URL, the AI uses the
+   company name, notes, photos, and event to fill in the official website
+   and careers page (clean domain chips) and a one-line "what they do".
+   Ambiguous names (e.g. "Hunter") get a confidence level and a picker to
+   choose or correct the company.
+4. **Jobs tailored to the student**: the target timeline comes from the
+   profile's graduation date (e.g. a Dec 2027 grad: Summer 2027 SWE/CS internships
+   and co-ops, new-grad roles starting early 2028). Each suggestion has a
+   title, why it fits, deadline if known, and links. Sponsorship is a
+   company-level "Likely / Unknown / Unlikely — verify" estimate, never
+   stated as fact. Never invent job URLs: link the real careers page plus
+   pre-filled careers-site and LinkedIn Jobs searches, labeled "AI
+   suggestion — verify on the careers page". Follow-up drafts mention the
+   student's situation naturally when useful, without sounding scripted.
+5. **"Refresh with my profile"** on existing contacts re-runs the AI with
+   the current profile.

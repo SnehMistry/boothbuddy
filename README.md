@@ -44,14 +44,18 @@ further._
 - [x] Business card / badge / booth photo reading (vision) to fill in missing fields
 - [x] Person & company research with source links, a confidence level, and a match confirm/reject step
 - [x] Open jobs/internships found per company, with links and deadlines
-- [x] "Reprocess with AI" after editing notes or adding photos, with friendly busy/error messages and automatic retry/fallback if Gemini is overloaded
+- [x] "Refresh with my profile" (reprocess) after editing notes or adding photos, with friendly busy/error messages and automatic retry/fallback if Gemini is overloaded
 - [x] End-of-Day recap per event: AI-drafted LinkedIn connection note + longer follow-up message, with tone options, character counters, Copy, Regenerate, "Open LinkedIn" (new tab on web), and "Open in Gmail" (pre-filled compose)
 - [x] Optional follow-up email draft when an email address is known
 - [x] Track follow-up status: Not sent / Sent / Replied
 - [x] Jobs-to-apply checklist per event, sorted by deadline, with Applied checkboxes
 - [x] Action items checklist per event
-- [x] Delete a contact or an entire event (with confirmation), cascading to their photos, action items, and job records
+- [x] Delete a contact or an entire event from a "⋯" menu (with confirmation), cascading to their photos, action items, and job records
 - [x] Change password and a System/Light/Dark appearance preference, from either phone or web
+- [x] "My profile" (school, major, year, graduation date, work authorization, interests) — fed into every AI prompt, so research, job suggestions, and drafts are written for you
+- [x] Company identification from just a name: official website + careers page (link-checked server-side), a one-line description, and a picker when the name is ambiguous
+- [x] Job suggestions tailored to your graduation timeline, each with "why it fits you", deadline if known, and careers-page / LinkedIn Jobs search links — never invented posting URLs — plus a "Likely / Unknown / Unlikely — verify" sponsorship estimate
+- [x] "Refresh with my profile" re-runs the AI (and redrafts follow-ups) after you update your profile
 - [x] Editable LinkedIn profile URL per contact (used by "Open LinkedIn" instead of falling back to a name search)
 - [x] Export an event's contacts to CSV — downloads on web, native share sheet on phone
 - [x] Local reminders (phone only): the day before and morning of each AI-found deadline, plus an 8pm "you met N people, do your follow-ups" nudge on event day
@@ -217,7 +221,7 @@ scan the QR code with Expo Go on your phone.
 ```bash
 supabase login
 supabase link --project-ref <your-project-ref>
-supabase db push                              # creates events, contacts, action_items, job_opportunities + RLS
+supabase db push                              # creates events, contacts, profiles, action_items, job_opportunities + RLS
 supabase secrets set GEMINI_API_KEY=<your-key>
 supabase functions deploy process-contact
 supabase functions deploy generate-followup
@@ -272,3 +276,4 @@ Built in phases, each one runnable and testable before moving to the next:
 - [x] **Phase 6** — Search/filter by name, company, and interest level (the one extra kept in scope).
 - [x] **Phase 7** — Final polish: a full light/dark design system (tokens, typography, Card/Badge/Chip/Checkbox primitives), custom app icon/branding, loading skeletons and empty states throughout, haptic feedback on key phone actions, delete contact/event with Storage cascade cleanup, a shared web/native confirm dialog (fixing a `react-native-web` bug where multi-button alerts silently no-op), change password, unit tests for pure helpers, and deployment (web to GitHub Pages, Android via EAS Build).
 - [x] **Phase 8** — Second polish pass: fixed a broken live-site icon bug (a stray `.gitignore` on the `gh-pages` branch was silently excluding every font asset), a WCAG AA contrast pass across every theme token, a phone bottom tab bar (Events/Deadlines/Settings) with a System/Light/Dark appearance preference, local deadline/follow-up reminders, CSV export, an editable LinkedIn URL field, a responsive web layout (collapsible sidebar → off-canvas drawer below 768px, single-pane contacts table/detail below it), hover states, keyboard shortcuts (Enter/Esc), safe-area and 44×44 touch-target fixes, human-readable dates everywhere, and a cleaner contact-detail layout (one card with dividers instead of several stacked boxes, a clean domain chip for URLs with tracking params stripped on save).
+- [ ] **Phase 9** — Profile-aware AI (on the `profile-and-jobs` branch, not yet deployed): My profile, company identification with an ambiguity picker, graduation-timeline job suggestions with verified careers links and a sponsorship estimate, "Refresh with my profile", and destructive actions moved into "⋯" menus.
