@@ -10,6 +10,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 import { corsHeaders } from '../_shared/cors.ts';
 import { generateStructured, type GeminiSchema } from '../_shared/gemini.ts';
+import { loadStudentProfile } from '../_shared/profile.ts';
 
 const TONES = ['casual', 'professional', 'enthusiastic'] as const;
 type Tone = (typeof TONES)[number];
@@ -78,6 +79,8 @@ Deno.serve(async (req) => {
     if (contactError) throw contactError;
     if (!contact) return jsonResponse({ error: 'Contact not found' }, 404);
 
+    const profile = await loadStudentProfile(supabase);
+
     const tone: Tone = TONES.includes(requestedTone as Tone)
       ? (requestedTone as Tone)
       : (contact.followup_tone as Tone) || 'casual';
@@ -93,7 +96,14 @@ Deno.serve(async (req) => {
         : null,
       contact.memorable ? `Something memorable: ${contact.memorable}` : null,
       contact.notes ? `Raw notes from the conversation:\n${contact.notes}` : null,
-      contact.research?.person?.summary ? `Research on them: ${contact.research.person.summary}` : null,
+      // Research the student marked as the wrong person must not leak
+      // into a message addressed to the right one.
+      contact.research?.person?.summary && contact.research.matchStatus !== 'rejected'
+        ? `Research on them: ${contact.research.person.summary}`
+        : null,
+      contact.research?.company?.description
+        ? `What their company does: ${contact.research.company.description}`
+        : null,
       contact.research?.company?.summary
         ? `Research on their company: ${contact.research.company.summary}`
         : null,
@@ -110,7 +120,12 @@ Deno.serve(async (req) => {
 
     const prompt = `You are a college student writing follow-up messages after meeting someone at a career fair. Write in a ${tone} tone — sound like a real student, not corporate or cringe.
 
+${profile.promptBlock}
+
+About the person they met:
 ${contextLines}
+
+Where it fits naturally, mention the student's situation (school, major/year, when they graduate, and what they're looking for) — at most once per message, in your own words, woven into the conversation rather than as a canned intro line. Skip it if it would feel forced (e.g. there's no room in the connection note). Don't bring up visas or work authorization unless the conversation notes show it was discussed.
 
 Write:
 1. A LinkedIn connection request note. It MUST be under 300 characters (LinkedIn's hard limit). Reference something specific from the conversation.
