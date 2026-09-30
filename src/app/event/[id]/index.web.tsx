@@ -13,6 +13,7 @@ import { ExternalLinkRow } from '@/components/external-link-row';
 import { FollowupCard } from '@/components/followup-card';
 import { InterestBadge, InterestPicker } from '@/components/interest-picker';
 import { LoadingView } from '@/components/loading-view';
+import { MoreMenu } from '@/components/more-menu';
 import { ThemedText } from '@/components/themed-text';
 import { Toast, useToast } from '@/components/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -95,7 +96,7 @@ function ContactDetailPanel({
       )}
       <View style={styles.panelHeader}>
         <Avatar name={contact.name || '?'} size={48} />
-        <View style={styles.flexShrink}>
+        <View style={styles.flex}>
           <ThemedText type="title">{contact.name || 'Unnamed contact'}</ThemedText>
           <ThemedText type="caption" themeColor="textMuted">
             Captured {formatDateTime(contact.createdAt)}
@@ -104,6 +105,10 @@ function ContactDetailPanel({
               : ''}
           </ThemedText>
         </View>
+        <MoreMenu
+          accessibilityLabel="Contact actions"
+          items={[{ label: 'Delete contact', icon: 'trash-outline', destructive: true, onPress: () => onDelete(contact) }]}
+        />
       </View>
       {!!contact.companyUrl && <ExternalLinkRow url={contact.companyUrl} variant="chip" />}
       <Pressable onPress={() => router.push(`/contact/${contact.id}`)}>
@@ -211,14 +216,6 @@ function ContactDetailPanel({
         onCopy={onCopy}
         onRegenerate={onRegenerateFollowup}
         onStatusChange={onFollowupStatusChange}
-      />
-
-      <Button
-        label="Delete Contact"
-        variant="danger"
-        icon="trash-outline"
-        onPress={() => onDelete(contact)}
-        style={styles.deleteButton}
       />
     </ScrollView>
   );
@@ -404,10 +401,16 @@ export default function EventDashboardScreen() {
           isNarrow && styles.tableColumnNarrow,
         ]}>
         <View style={styles.toolbar}>
-          <ThemedText type="caption" themeColor="textMuted">
-            {formatHumanDate(event.date)}
-            {event.location ? ` · ${event.location}` : ''}
-          </ThemedText>
+          <View style={styles.toolbarTop}>
+            <ThemedText type="caption" themeColor="textMuted" style={styles.flexShrink}>
+              {formatHumanDate(event.date)}
+              {event.location ? ` · ${event.location}` : ''}
+            </ThemedText>
+            <MoreMenu
+              accessibilityLabel="Event actions"
+              items={[{ label: 'Delete event', icon: 'trash-outline', destructive: true, onPress: handleDeleteEvent }]}
+            />
+          </View>
           <View style={styles.toolbarButtons}>
             <Pressable onPress={() => router.push(`/event/${id}/new-contact`)} style={styles.toolbarLink}>
               <Ionicons name="add-circle-outline" size={15} color={theme.accent} />
@@ -425,12 +428,6 @@ export default function EventDashboardScreen() {
               <Ionicons name="download-outline" size={15} color={theme.accent} />
               <ThemedText type="link" themeColor="accentStrong">
                 Export CSV
-              </ThemedText>
-            </Pressable>
-            <Pressable onPress={handleDeleteEvent} style={styles.toolbarLink}>
-              <Ionicons name="trash-outline" size={15} color={theme.danger} />
-              <ThemedText type="link" themeColor="dangerStrong">
-                Delete
               </ThemedText>
             </Pressable>
           </View>
@@ -572,9 +569,17 @@ const styles = StyleSheet.create({
   toolbar: {
     gap: Spacing.one,
   },
+  toolbarTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
   toolbarButtons: {
     flexDirection: 'row',
-    gap: Spacing.four,
+    flexWrap: 'wrap',
+    columnGap: Spacing.four,
+    rowGap: Spacing.one,
   },
   toolbarLink: {
     flexDirection: 'row',
@@ -665,10 +670,10 @@ const styles = StyleSheet.create({
   sectionSpacing: {
     marginTop: Spacing.four,
   },
-  deleteButton: {
-    marginTop: Spacing.six,
-  },
   flexShrink: {
     flexShrink: 1,
+  },
+  flex: {
+    flex: 1,
   },
 });

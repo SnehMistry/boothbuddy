@@ -16,6 +16,7 @@ import { Avatar } from '@/components/avatar';
 import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
 import { InterestBadge } from '@/components/interest-picker';
+import { MoreMenu } from '@/components/more-menu';
 import { SkeletonList } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
@@ -106,9 +107,17 @@ export default function EventTimelineScreen() {
                 <Pressable onPress={() => handleExport(found.name)} hitSlop={12}>
                   <Ionicons name="download-outline" size={20} color={theme.textMuted} />
                 </Pressable>
-                <Pressable onPress={() => handleDeleteEvent(found.name)} hitSlop={12}>
-                  <Ionicons name="trash-outline" size={20} color={theme.danger} />
-                </Pressable>
+                <MoreMenu
+                  accessibilityLabel="Event actions"
+                  items={[
+                    {
+                      label: 'Delete event',
+                      icon: 'trash-outline',
+                      destructive: true,
+                      onPress: () => handleDeleteEvent(found.name),
+                    },
+                  ]}
+                />
               </View>
             ),
           });
@@ -231,7 +240,8 @@ export default function EventTimelineScreen() {
 const styles = StyleSheet.create({
   headerButtons: {
     flexDirection: 'row',
-    gap: Spacing.four,
+    alignItems: 'center',
+    gap: Spacing.three,
   },
   container: {
     flex: 1,

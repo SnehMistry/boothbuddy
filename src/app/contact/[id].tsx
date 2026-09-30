@@ -14,6 +14,7 @@ import { Divider } from '@/components/divider';
 import { ExternalLinkRow } from '@/components/external-link-row';
 import { InterestPicker } from '@/components/interest-picker';
 import { LoadingView } from '@/components/loading-view';
+import { MoreMenu } from '@/components/more-menu';
 import { PhotoPicker } from '@/components/photo-picker';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
@@ -221,6 +222,12 @@ export default function ContactDetailScreen() {
               ? `${contact.name} · ${contact.company}`
               : contact.name
             : 'Contact',
+          headerRight: () => (
+            <MoreMenu
+              accessibilityLabel="Contact actions"
+              items={[{ label: 'Delete contact', icon: 'trash-outline', destructive: true, onPress: handleDelete }]}
+            />
+          ),
         }}
       />
       <View style={styles.timestampRow}>
@@ -555,14 +562,6 @@ export default function ContactDetailScreen() {
           <ExternalLinkRow url={contact.linkedinUrl} variant="chip" />
         </View>
       )}
-
-      <Button
-        label="Delete Contact"
-        variant="danger"
-        icon="trash-outline"
-        onPress={handleDelete}
-        style={styles.deleteButton}
-      />
     </ScrollView>
   );
 }
@@ -616,10 +615,6 @@ const styles = StyleSheet.create({
   },
   companyLinkRow: {
     marginTop: Spacing.one,
-  },
-  deleteButton: {
-    marginTop: Spacing.six,
-    alignSelf: 'flex-start',
   },
   aiCard: {
     marginTop: Spacing.three,
