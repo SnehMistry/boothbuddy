@@ -12,8 +12,10 @@ import type {
   FollowupStatus,
   FollowupTone,
   InterestLevel,
+  JobKind,
   JobOpportunity,
   PhotoLabel,
+  Profile,
 } from '@/lib/types';
 
 type EventRow = {
@@ -66,10 +68,23 @@ type JobOpportunityRow = {
   id: string;
   contact_id: string;
   title: string;
+  fit_reason: string | null;
+  kind: JobKind | null;
   url: string | null;
   deadline: string | null;
   applied: boolean;
   created_at: string;
+};
+
+type ProfileRow = {
+  user_id: string;
+  school: string | null;
+  major: string | null;
+  year_in_school: string | null;
+  graduation: string | null;
+  work_authorization: string | null;
+  interests: string | null;
+  updated_at: string;
 };
 
 type ContactPhotoRow = {
@@ -147,11 +162,59 @@ function jobFromRow(row: JobOpportunityRow): JobOpportunity {
     id: row.id,
     contactId: row.contact_id,
     title: row.title,
+    fitReason: row.fit_reason ?? undefined,
+    kind: row.kind ?? undefined,
     url: row.url ?? undefined,
     deadline: row.deadline ?? undefined,
     applied: row.applied,
     createdAt: row.created_at,
   };
+}
+
+function profileFromRow(row: ProfileRow): Profile {
+  return {
+    school: row.school ?? '',
+    major: row.major ?? '',
+    yearInSchool: row.year_in_school ?? '',
+    graduation: row.graduation ?? '',
+    workAuthorization: row.work_authorization ?? '',
+    interests: row.interests ?? '',
+    updatedAt: row.updated_at,
+  };
+}
+
+// The signed-in user's profile, or undefined if they've never saved one.
+// RLS scopes `profiles` to the caller's own row, so no user_id filter is
+// needed.
+export async function getProfile(): Promise<Profile | undefined> {
+  const { data, error } = await supabase.from('profiles').select('*').maybeSingle();
+  if (error) throw error;
+  return data ? profileFromRow(data as ProfileRow) : undefined;
+}
+
+// Upsert rather than update: the first save creates the row. user_id
+// defaults to auth.uid() server-side, but upsert needs it explicitly to
+// know which row to conflict on.
+export async function saveProfile(profile: Profile): Promise<Profile> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error('Not signed in');
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert({
+      user_id: userData.user.id,
+      school: profile.school.trim() || null,
+      major: profile.major.trim() || null,
+      year_in_school: profile.yearInSchool.trim() || null,
+      graduation: profile.graduation.trim() || null,
+      work_authorization: profile.workAuthorization.trim() || null,
+      interests: profile.interests.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return profileFromRow(data as ProfileRow);
 }
 
 export async function getEvents(): Promise<BoothEvent[]> {
@@ -344,6 +407,7 @@ export async function updateContact(
 ): Promise<Contact | undefined> {
   const updates: Record<string, unknown> = {};
   if (patch.name !== undefined) updates.name = patch.name;
+  if (patch.company !== undefined) updates.company = patch.company ?? null;
   if (patch.companyUrl !== undefined) updates.company_url = patch.companyUrl ?? null;
   if (patch.linkedinUrl !== undefined) updates.linkedin_url = patch.linkedinUrl ?? null;
   if (patch.notes !== undefined) updates.notes = patch.notes ?? null;
@@ -418,6 +482,39 @@ export async function setResearchMatchStatus(
     .from('contacts')
     .update({ research: { ...contact.research, matchStatus } })
     .eq('id', contact.id);
+  if (error) throw error;
+  return getContact(contact.id);
+}
+
+// The user picking which company this contact actually works at — either
+// confirming the AI's pick, or choosing one of its alternatives for an
+// ambiguous name. Picking an alternative also adopts its website as the
+// company URL (if none was typed), so the next AI refresh has an
+// unambiguous anchor instead of guessing from the name again.
+export async function confirmCompany(
+  contact: Contact,
+  choice: { name: string; description?: string; website?: string },
+): Promise<Contact | undefined> {
+  if (!contact.research) return contact;
+  const current = contact.research.company;
+  const isSwitch = choice.name !== current.name;
+  const company = {
+    ...current,
+    name: choice.name,
+    description: choice.description ?? current.description,
+    // A different company's careers page/sponsorship info no longer
+    // applies — cleared until the user refreshes with AI.
+    ...(isSwitch ? { website: choice.website, careersUrl: undefined, sponsorship: undefined } : {}),
+    confidence: 'high' as const,
+    alternatives: [],
+    userConfirmed: true,
+  };
+  const updates: Record<string, unknown> = {
+    company: choice.name,
+    research: { ...contact.research, company },
+  };
+  if (!contact.companyUrl && choice.website) updates.company_url = choice.website;
+  const { error } = await supabase.from('contacts').update(updates).eq('id', contact.id);
   if (error) throw error;
   return getContact(contact.id);
 }
@@ -560,4 +657,20 @@ export async function generateFollowup(
     tone,
   });
   return contactFromRow(data.contact, []);
+}
+
+// "Refresh with my profile": re-runs the whole AI pipeline (card, company
+// identity, research, tailored job suggestions) and — only if drafts
+// already existed — redrafts the follow-up in the same tone, so both pick
+// up profile edits. Sequential, never parallel, per the free tier's rate
+// limit rule.
+export async function refreshWithProfile(contact: Contact): Promise<{
+  contact: Contact;
+  actionItems: ActionItem[];
+  jobs: JobOpportunity[];
+}> {
+  const result = await processContact(contact.id);
+  if (!contact.linkedinNote) return result;
+  const redrafted = await generateFollowup(contact.id, contact.followupTone);
+  return { ...result, contact: { ...result.contact, ...redrafted } };
 }

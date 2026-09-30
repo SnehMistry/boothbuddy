@@ -152,6 +152,21 @@ export function WebSidebar() {
 
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
         <Pressable
+          onPress={() => router.push('/settings')}
+          style={({ hovered }: { hovered?: boolean }) => [
+            styles.footerRow,
+            pathname === '/settings'
+              ? { backgroundColor: theme.accentMuted }
+              : hovered && { backgroundColor: theme.surfaceMuted },
+          ]}>
+          <Ionicons name="person-circle-outline" size={15} color={theme.textMuted} />
+          {showLabels && (
+            <ThemedText type="body" themeColor="textMuted">
+              Profile & settings
+            </ThemedText>
+          )}
+        </Pressable>
+        <Pressable
           onPress={() => setChangingPassword(true)}
           style={({ hovered }: { hovered?: boolean }) => [
             styles.footerRow,

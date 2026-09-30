@@ -6,3 +6,6 @@
 .env.keys
 .env.local
 .env.*.local
+
+# Local-only seed data (e.g. the owner's personal profile)
+seeds/*.local.sql

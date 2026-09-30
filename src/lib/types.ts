@@ -42,13 +42,42 @@ export type ResearchSource = {
 export const MATCH_STATUSES = ['unconfirmed', 'confirmed', 'rejected'] as const;
 export type MatchStatus = (typeof MATCH_STATUSES)[number];
 
+export const SPONSORSHIP_LIKELIHOODS = ['likely', 'unknown', 'unlikely'] as const;
+export type SponsorshipLikelihood = (typeof SPONSORSHIP_LIKELIHOODS)[number];
+
+// Another company the AI thought the contact's company *might* be, offered
+// when the name alone is ambiguous (e.g. "Hunter") so the user can pick.
+export type CompanyCandidate = {
+  name: string;
+  description: string;
+  website?: string;
+};
+
+// Which company this contact works at, as identified by AI from whatever
+// context exists (company name, notes, photos, event) — so the user can
+// tell at a glance whether it picked the right one. Every field is
+// optional because contacts processed before this existed don't have it.
+export type CompanyIdentity = {
+  summary: string;
+  name?: string;
+  description?: string; // one line: what the company does
+  website?: string; // checked reachable server-side before being stored
+  careersUrl?: string; // likewise — never a guessed deep link
+  confidence?: 'high' | 'low';
+  alternatives?: CompanyCandidate[];
+  userConfirmed?: boolean; // the user picked/confirmed this company
+  // "Known to sponsor international students / H-1B?" — always an AI
+  // estimate the UI labels "verify", never presented as fact.
+  sponsorship?: { likelihood: SponsorshipLikelihood; note: string };
+};
+
 // Person & company research produced by the process-contact Edge Function.
 // `grounded` is false when Gemini's Google Search grounding wasn't
 // available/successful and the summaries come from the model's own
 // knowledge instead — the UI must label that clearly, per PROMPT.md.
 export type ContactResearch = {
   person: { summary: string; confidence: 'high' | 'low' };
-  company: { summary: string };
+  company: CompanyIdentity;
   sources: ResearchSource[];
   grounded: boolean;
   matchStatus: MatchStatus;
@@ -62,10 +91,25 @@ export type ActionItem = {
   createdAt: string;
 };
 
+export const JOB_KINDS = ['internship', 'co_op', 'new_grad', 'other'] as const;
+export type JobKind = (typeof JOB_KINDS)[number];
+
+export const JOB_KIND_LABELS: Record<JobKind, string> = {
+  internship: 'Internship',
+  co_op: 'Co-op',
+  new_grad: 'New grad',
+  other: 'Role',
+};
+
+// An AI job *suggestion* tailored to the user's profile — not a scraped
+// listing. `url` is the company's real careers page, never an invented
+// posting link; the UI adds pre-filled search links next to it.
 export type JobOpportunity = {
   id: string;
   contactId: string;
   title: string;
+  fitReason?: string; // why this fits the user's profile/timeline
+  kind?: JobKind;
   url?: string;
   deadline?: string; // free text — see the migration for why it's not a date column
   applied: boolean;
@@ -111,4 +155,26 @@ export type Contact = {
   followupTone: FollowupTone;
   followupStatus: FollowupStatus;
   followupGeneratedAt?: string;
+};
+
+// "My profile" — who the user is, fed into every Gemini prompt (research,
+// job suggestions, follow-up drafts). Free text throughout: it's read by a
+// language model, not parsed.
+export type Profile = {
+  school: string;
+  major: string;
+  yearInSchool: string;
+  graduation: string;
+  workAuthorization: string;
+  interests: string;
+  updatedAt?: string;
+};
+
+export const EMPTY_PROFILE: Profile = {
+  school: '',
+  major: '',
+  yearInSchool: '',
+  graduation: '',
+  workAuthorization: '',
+  interests: '',
 };

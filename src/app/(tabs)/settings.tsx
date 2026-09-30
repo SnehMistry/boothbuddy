@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChangePasswordModal } from '@/components/change-password-modal';
+import { ProfileForm } from '@/components/profile-form';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -54,7 +55,12 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        <ThemedText type="label" themeColor="textMuted" style={styles.sectionLabel}>
+          My profile
+        </ThemedText>
+        <ProfileForm />
+
         <ThemedText type="label" themeColor="textMuted" style={styles.sectionLabel}>
           Appearance
         </ThemedText>
@@ -100,6 +106,11 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.four,
     gap: Spacing.two,
+    // Settings is also the web sidebar's "Profile & settings" page — keep
+    // the form a readable width on a wide browser window.
+    maxWidth: 640,
+    width: '100%',
+    alignSelf: 'center',
   },
   sectionLabel: {
     marginTop: Spacing.four,
