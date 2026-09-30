@@ -8,6 +8,7 @@ import { Badge } from '@/components/badge';
 import { Card } from '@/components/card';
 import { Checkbox } from '@/components/checkbox';
 import { ExternalLinkRow } from '@/components/external-link-row';
+import { JobSuggestionsDisclaimer } from '@/components/job-suggestions';
 import { SkeletonList } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -61,6 +62,7 @@ export default function DeadlinesScreen() {
           data={sorted}
           keyExtractor={(job) => job.id}
           contentContainerStyle={styles.list}
+          ListHeaderComponent={<JobSuggestionsDisclaimer />}
           renderItem={({ item }) => (
             <Card>
               <Checkbox label={item.title} checked={false} onPress={() => toggleApplied(item)} />
@@ -75,7 +77,7 @@ export default function DeadlinesScreen() {
               </Pressable>
               <View style={styles.bottomRow}>
                 {!!item.deadline && <Badge label={`Due ${formatHumanDate(item.deadline)}`} tone="warning" />}
-                {!!item.url && <ExternalLinkRow url={item.url} label="Open" />}
+                {!!item.url && <ExternalLinkRow url={item.url} label="Careers page" />}
               </View>
             </Card>
           )}

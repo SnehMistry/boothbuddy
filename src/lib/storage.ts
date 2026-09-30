@@ -501,7 +501,7 @@ export async function confirmCompany(
   const company = {
     ...current,
     name: choice.name,
-    description: choice.description ?? current.description,
+    description: isSwitch ? choice.description : (choice.description ?? current.description),
     // A different company's careers page/sponsorship info no longer
     // applies — cleared until the user refreshes with AI.
     ...(isSwitch ? { website: choice.website, careersUrl: undefined, sponsorship: undefined } : {}),

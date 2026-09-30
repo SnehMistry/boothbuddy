@@ -10,9 +10,11 @@ import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Checkbox } from '@/components/checkbox';
 import { Chip } from '@/components/chip';
+import { CompanyInfo, hasCompanyIdentity } from '@/components/company-info';
 import { Divider } from '@/components/divider';
 import { ExternalLinkRow } from '@/components/external-link-row';
 import { InterestPicker } from '@/components/interest-picker';
+import { JobSuggestionRow, JobSuggestionsDisclaimer } from '@/components/job-suggestions';
 import { LoadingView } from '@/components/loading-view';
 import { MoreMenu } from '@/components/more-menu';
 import { PhotoPicker } from '@/components/photo-picker';
@@ -24,11 +26,14 @@ import { confirmAction } from '@/lib/confirm';
 import { formatDateTime, formatHumanDate } from '@/lib/dates';
 import {
   addPhotoToContact,
+  confirmCompany,
   deleteContact,
   getActionItemsForContact,
   getContact,
   getJobsForContact,
+  getProfile,
   processContact,
+  refreshWithProfile,
   removePhotoFromContact,
   setActionItemDone,
   setContactPhotoLabel,
@@ -37,7 +42,15 @@ import {
   updateContact,
 } from '@/lib/storage';
 import { stripTrackingParams } from '@/lib/url';
-import type { ActionItem, Contact, ContactPhoto, InterestLevel, JobOpportunity, PhotoLabel } from '@/lib/types';
+import type {
+  ActionItem,
+  CompanyCandidate,
+  Contact,
+  ContactPhoto,
+  InterestLevel,
+  JobOpportunity,
+  PhotoLabel,
+} from '@/lib/types';
 
 export default function ContactDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -47,6 +60,8 @@ export default function ContactDetailScreen() {
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [jobs, setJobs] = useState<JobOpportunity[]>([]);
   const [name, setName] = useState('');
+  const [company, setCompany] = useState('');
+  const [profileUpdatedAt, setProfileUpdatedAt] = useState<string | undefined>();
   const [companyUrl, setCompanyUrl] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [notes, setNotes] = useState('');
@@ -54,14 +69,17 @@ export default function ContactDetailScreen() {
   const [researchExpanded, setResearchExpanded] = useState(true);
 
   const loadAll = useCallback(async (contactId: string) => {
-    const [found, items, jobList] = await Promise.all([
+    const [found, items, jobList, profile] = await Promise.all([
       getContact(contactId),
       getActionItemsForContact(contactId),
       getJobsForContact(contactId),
+      getProfile().catch(() => undefined),
     ]);
+    setProfileUpdatedAt(profile?.updatedAt);
     if (found) {
       setContact(found);
       setName(found.name);
+      setCompany(found.company ?? '');
       setCompanyUrl(found.companyUrl ?? '');
       setLinkedinUrl(found.linkedinUrl ?? '');
       setNotes(found.notes ?? '');
@@ -92,6 +110,27 @@ export default function ContactDetailScreen() {
     if (!contact || trimmed === contact.name) return;
     const updated = await updateContact(contact.id, { name: trimmed });
     if (updated) setContact(updated);
+  };
+
+  // Typing a company name by hand is the "none of these" correction for an
+  // ambiguous AI pick — it's recorded as user-confirmed so the next AI
+  // refresh uses exactly this name instead of guessing again.
+  const saveCompany = async () => {
+    const trimmed = company.trim();
+    if (!contact || trimmed === (contact.company ?? '')) return;
+    try {
+      const updated =
+        trimmed && contact.research
+          ? await confirmCompany(contact, { name: trimmed })
+          : await updateContact(contact.id, { company: trimmed || undefined });
+      if (updated) setContact(updated);
+    } catch (error) {
+      setCompany(contact.company ?? '');
+      Alert.alert(
+        "Couldn't save company",
+        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      );
+    }
   };
 
   const saveCompanyUrl = async () => {
@@ -134,11 +173,14 @@ export default function ContactDetailScreen() {
     if (updated) setContact(updated);
   };
 
-  const handleProcess = async () => {
-    if (!contact || processing) return;
+  // First run: "Process with AI". Afterwards the same button is "Refresh
+  // with my profile", which also redrafts existing follow-ups.
+  const handleProcess = async (target: Contact | null = contact) => {
+    if (!target || processing) return;
     setProcessing(true);
     try {
-      const result = await processContact(contact.id);
+      const result =
+        target.aiStatus === 'done' ? await refreshWithProfile(target) : await processContact(target.id);
       setContact((prev) => (prev ? { ...prev, ...result.contact, photos: prev.photos } : prev));
       setActionItems(result.actionItems);
       setJobs(result.jobs);
@@ -147,9 +189,30 @@ export default function ContactDetailScreen() {
         "Couldn't process with AI",
         describeAiError(error instanceof Error ? error.message : undefined).headline,
       );
-      await loadAll(contact.id);
+      await loadAll(target.id);
     } finally {
       setProcessing(false);
+    }
+  };
+
+  // Picking the AI's own suggestion just confirms it; picking a different
+  // company invalidates the research/jobs, so it refreshes right away (an
+  // explicit user action, so this isn't a silent paid re-run).
+  const handlePickCompany = async (choice: CompanyCandidate) => {
+    if (!contact) return;
+    const isSwitch = choice.name !== contact.research?.company.name;
+    try {
+      const updated = await confirmCompany(contact, choice);
+      if (!updated) return;
+      setContact(updated);
+      setCompany(updated.company ?? '');
+      setCompanyUrl(updated.companyUrl ?? '');
+      if (isSwitch) await handleProcess(updated);
+    } catch (error) {
+      Alert.alert(
+        "Couldn't update company",
+        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      );
     }
   };
 
@@ -210,6 +273,9 @@ export default function ContactDetailScreen() {
   if (!contact) return <LoadingView />;
 
   const hasCard = contact.aiStatus === 'done';
+  const profileChanged =
+    hasCard && !!profileUpdatedAt && !!contact.aiProcessedAt && profileUpdatedAt > contact.aiProcessedAt;
+  const companyIdentity = contact.research?.company;
 
   return (
     <ScrollView
@@ -257,20 +323,28 @@ export default function ContactDetailScreen() {
             <AiErrorNotice error={contact.aiError} />
             <Button
               label={processing ? 'Retrying…' : 'Retry'}
-              onPress={handleProcess}
+              onPress={() => handleProcess()}
               disabled={processing}
               loading={processing}
               icon="refresh"
             />
           </>
         ) : (
-          <Button
-            label={processing ? 'AI busy, retrying…' : hasCard ? 'Reprocess with AI' : 'Process with AI'}
-            onPress={handleProcess}
-            disabled={processing}
-            loading={processing}
-            icon="sparkles"
-          />
+          <>
+            <Button
+              label={processing ? 'AI busy, retrying…' : hasCard ? 'Refresh with my profile' : 'Process with AI'}
+              onPress={() => handleProcess()}
+              disabled={processing}
+              loading={processing}
+              icon={hasCard ? 'refresh' : 'sparkles'}
+            />
+            {profileChanged && (
+              <ThemedText type="caption" themeColor="accentStrong">
+                Your profile changed since this contact was processed — refresh to update its research, jobs,
+                and drafts.
+              </ThemedText>
+            )}
+          </>
         )}
       </View>
 
@@ -285,6 +359,14 @@ export default function ContactDetailScreen() {
               )}
 
               <InterestPicker value={contact.interestLevel} onChange={setInterestLevel} />
+
+              {hasCompanyIdentity(companyIdentity) && (
+                <CompanyInfo
+                  company={companyIdentity}
+                  onPick={handlePickCompany}
+                  correctHint="None of these? Type the right name in the Company field below — it'll be used next time you refresh."
+                />
+              )}
 
               {!!contact.summary && <ThemedText type="body">{contact.summary}</ThemedText>}
 
@@ -374,21 +456,17 @@ export default function ContactDetailScreen() {
                 <View style={styles.labelRow}>
                   <Ionicons name="briefcase-outline" size={14} color={theme.textMuted} />
                   <ThemedText type="label" themeColor="textMuted">
-                    Jobs found
+                    Suggested roles for you
                   </ThemedText>
                 </View>
+                <JobSuggestionsDisclaimer />
                 {jobs.map((job) => (
-                  <View key={job.id} style={styles.jobRow}>
-                    <View style={styles.flexShrink}>
-                      <Checkbox label={job.title} checked={job.applied} onPress={() => toggleJobApplied(job)} />
-                      {!!job.deadline && (
-                        <View style={styles.jobDeadline}>
-                          <Badge label={`Due ${formatHumanDate(job.deadline)}`} tone="warning" />
-                        </View>
-                      )}
-                    </View>
-                    {!!job.url && <ExternalLinkRow url={job.url} label="Open" />}
-                  </View>
+                  <JobSuggestionRow
+                    key={job.id}
+                    job={job}
+                    company={contact.company}
+                    onToggleApplied={toggleJobApplied}
+                  />
                 ))}
               </View>
             </>
@@ -492,6 +570,18 @@ export default function ContactDetailScreen() {
         onChangeText={setName}
         onBlur={saveName}
         placeholder="Their name"
+        placeholderTextColor={theme.textMuted}
+        style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
+      />
+
+      <ThemedText type="label" themeColor="textMuted" style={styles.sectionSpacing}>
+        Company
+      </ThemedText>
+      <TextInput
+        value={company}
+        onChangeText={setCompany}
+        onBlur={saveCompany}
+        placeholder="Their company"
         placeholderTextColor={theme.textMuted}
         style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
       />
@@ -643,16 +733,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
-  },
-  jobRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  jobDeadline: {
-    marginLeft: Spacing.four,
-    marginTop: 2,
   },
   flexShrink: {
     flexShrink: 1,

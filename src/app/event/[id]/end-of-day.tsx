@@ -7,15 +7,14 @@ import * as Clipboard from 'expo-clipboard';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Checkbox } from '@/components/checkbox';
-import { ExternalLinkRow } from '@/components/external-link-row';
 import { FollowupCard } from '@/components/followup-card';
+import { JobSuggestionRow, JobSuggestionsDisclaimer } from '@/components/job-suggestions';
 import { LoadingView } from '@/components/loading-view';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { Toast, useToast } from '@/components/toast';
 import { describeAiError } from '@/lib/ai-errors';
 import { deadlineSortKey } from '@/lib/deadlines';
-import { formatHumanDate } from '@/lib/dates';
 import {
   generateFollowup,
   getActionItemsForContacts,
@@ -170,30 +169,22 @@ export default function EndOfDayScreen() {
         {sortedJobs.length > 0 && (
           <View style={styles.sectionSpacing}>
             <ThemedText type="title">Jobs to apply for</ThemedText>
+            <JobSuggestionsDisclaimer />
             <Card>
               {sortedJobs.map((job) => (
-                <View key={job.id} style={styles.listRow}>
-                  <View style={styles.flexShrink}>
-                    <Checkbox
-                      label={job.title}
-                      checked={job.applied}
-                      onPress={() => toggleJobApplied(job)}
-                    />
-                    <View style={styles.jobMetaRow}>
-                      {!!contactById.get(job.contactId)?.company && (
-                        <ThemedText type="caption" themeColor="textMuted">
-                          {contactById.get(job.contactId)?.company}
-                        </ThemedText>
-                      )}
-                      {!!job.deadline && (
-                        <ThemedText type="caption" themeColor="warning">
-                          Due {formatHumanDate(job.deadline)}
-                        </ThemedText>
-                      )}
-                    </View>
-                  </View>
-                  {!!job.url && <ExternalLinkRow url={job.url} label="Open" />}
-                </View>
+                <JobSuggestionRow
+                  key={job.id}
+                  job={job}
+                  company={contactById.get(job.contactId)?.company}
+                  onToggleApplied={toggleJobApplied}
+                  meta={
+                    <ThemedText type="caption" themeColor="textMuted">
+                      {[contactById.get(job.contactId)?.company, contactById.get(job.contactId)?.name]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </ThemedText>
+                  }
+                />
               ))}
             </Card>
           </View>
@@ -241,19 +232,5 @@ const styles = StyleSheet.create({
   },
   draftAllButton: {
     marginTop: Spacing.two,
-  },
-  listRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  jobMetaRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    marginLeft: Spacing.four,
-  },
-  flexShrink: {
-    flexShrink: 1,
   },
 });

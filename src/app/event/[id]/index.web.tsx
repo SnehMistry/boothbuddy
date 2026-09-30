@@ -9,9 +9,11 @@ import { Avatar } from '@/components/avatar';
 import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
 import { Chip } from '@/components/chip';
+import { CompanyInfo, hasCompanyIdentity } from '@/components/company-info';
 import { ExternalLinkRow } from '@/components/external-link-row';
 import { FollowupCard } from '@/components/followup-card';
 import { InterestBadge, InterestPicker } from '@/components/interest-picker';
+import { JobSuggestionRow, JobSuggestionsDisclaimer } from '@/components/job-suggestions';
 import { LoadingView } from '@/components/loading-view';
 import { MoreMenu } from '@/components/more-menu';
 import { ThemedText } from '@/components/themed-text';
@@ -25,6 +27,7 @@ import { describeAiError } from '@/lib/ai-errors';
 import { exportContactsCsv } from '@/lib/export-csv';
 import { formatDateTime, formatHumanDate } from '@/lib/dates';
 import {
+  confirmCompany,
   deleteContact,
   deleteEvent,
   generateFollowup,
@@ -32,15 +35,19 @@ import {
   getEvent,
   getJobsForContacts,
   processContact,
+  refreshWithProfile,
+  setJobApplied,
   setResearchMatchStatus,
   updateContact,
 } from '@/lib/storage';
 import {
   INTEREST_LEVELS,
   type BoothEvent,
+  type CompanyCandidate,
   type Contact,
   type FollowupTone,
   type InterestLevel,
+  type JobOpportunity,
 } from '@/lib/types';
 
 const INTEREST_FILTER_LABELS: Record<InterestFilter, string> = {
@@ -59,6 +66,7 @@ function AiStatusChip({ status, error }: { status: Contact['aiStatus']; error?: 
 
 function ContactDetailPanel({
   contact,
+  jobs,
   processing,
   generating,
   onCopy,
@@ -67,10 +75,13 @@ function ContactDetailPanel({
   onFollowupStatusChange,
   onInterestChange,
   onMatchStatus,
+  onPickCompany,
+  onToggleJobApplied,
   onDelete,
   onBack,
 }: {
   contact: Contact;
+  jobs: JobOpportunity[];
   processing: boolean;
   generating: boolean;
   onCopy: (text: string) => void;
@@ -79,6 +90,8 @@ function ContactDetailPanel({
   onFollowupStatusChange: Parameters<typeof FollowupCard>[0]['onStatusChange'];
   onInterestChange: (contact: Contact, level: InterestLevel) => void;
   onMatchStatus: (contact: Contact, status: 'confirmed' | 'rejected') => void;
+  onPickCompany: (contact: Contact, choice: CompanyCandidate) => void;
+  onToggleJobApplied: (job: JobOpportunity) => void;
   onDelete: (contact: Contact) => void;
   onBack?: () => void;
 }) {
@@ -121,6 +134,13 @@ function ContactDetailPanel({
 
       {contact.aiStatus === 'done' ? (
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          {hasCompanyIdentity(contact.research?.company) && (
+            <CompanyInfo
+              company={contact.research.company}
+              onPick={(choice) => onPickCompany(contact, choice)}
+              correctHint="None of these? Use “Edit notes, photos & raw details” to type the right company, then refresh."
+            />
+          )}
           {!!contact.summary && <ThemedText type="body">{contact.summary}</ThemedText>}
           {!!contact.topics?.length && (
             <View style={styles.chipRow}>
@@ -162,6 +182,23 @@ function ContactDetailPanel({
           {!!contact.email && <ExternalLinkRow url={`mailto:${contact.email}`} label={contact.email} />}
           {!!contact.linkedinUrl && <ExternalLinkRow url={contact.linkedinUrl} />}
 
+          {!!jobs.length && (
+            <View style={styles.cardSection}>
+              <ThemedText type="label" themeColor="textMuted">
+                <Ionicons name="briefcase-outline" size={12} /> Suggested roles for you
+              </ThemedText>
+              <JobSuggestionsDisclaimer />
+              {jobs.map((job) => (
+                <JobSuggestionRow
+                  key={job.id}
+                  job={job}
+                  company={contact.company}
+                  onToggleApplied={onToggleJobApplied}
+                />
+              ))}
+            </View>
+          )}
+
           {!!contact.research && (
             <View style={styles.researchBlock}>
               <ThemedText type="bodyBold">
@@ -195,6 +232,8 @@ function ContactDetailPanel({
             </View>
           )}
         </View>
+      ) : contact.aiStatus === 'processing' ? (
+        <Badge label="AI is processing this contact…" tone="accent" />
       ) : (
         <>
           {contact.aiStatus === 'error' && <AiErrorNotice error={contact.aiError} />}
@@ -205,6 +244,16 @@ function ContactDetailPanel({
             onPress={() => onProcess(contact)}
           />
         </>
+      )}
+
+      {contact.aiStatus === 'done' && (
+        <Button
+          label={processing ? 'AI busy, retrying…' : 'Refresh with my profile'}
+          icon="refresh"
+          variant="secondary"
+          loading={processing}
+          onPress={() => onProcess(contact)}
+        />
       )}
 
       <ThemedText type="title" style={styles.sectionSpacing}>
@@ -229,7 +278,8 @@ export default function EventDashboardScreen() {
   const isNarrow = width < 768;
   const [event, setEvent] = useState<BoothEvent | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [dueThisWeek, setDueThisWeek] = useState(0);
+  const [jobs, setJobs] = useState<JobOpportunity[]>([]);
+  const [now, setNow] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
@@ -242,14 +292,11 @@ export default function EventDashboardScreen() {
     setEvent(foundEvent ?? null);
     setContacts(foundContacts);
     if (foundEvent) navigation.setOptions({ title: foundEvent.name });
-    const foundJobs = await getJobsForContacts(foundContacts.map((c) => c.id));
+    setJobs(await getJobsForContacts(foundContacts.map((c) => c.id)));
     // Plain async callback, not render/an effect — Date.now() here doesn't
     // trip the render-purity lint rule the way it would in the component
     // body.
-    const now = Date.now();
-    setDueThisWeek(
-      foundJobs.filter((job) => !job.applied && isDueWithinDays(job.deadline, 7, now)).length,
-    );
+    setNow(Date.now());
   }, [id, navigation]);
 
   useFocusEffect(
@@ -260,19 +307,26 @@ export default function EventDashboardScreen() {
 
   useEffect(() => {
     if (!contacts.some((c) => c.aiStatus === 'processing')) return;
-    const interval = setInterval(() => getContactsForEvent(id).then(setContacts), 4000);
+    // Full reload (not just contacts) so jobs found by a background run
+    // show up in the panel and the "due this week" stat too.
+    const interval = setInterval(load, 4000);
     return () => clearInterval(interval);
-  }, [contacts, id]);
+  }, [contacts, load]);
 
   const selected = contacts.find((c) => c.id === selectedId) ?? null;
+  const dueThisWeek = jobs.filter((job) => !job.applied && isDueWithinDays(job.deadline, 7, now)).length;
 
+  // First run processes; afterwards it's "Refresh with my profile", which
+  // also redrafts an existing follow-up.
   const handleProcess = async (contact: Contact) => {
     setProcessingId(contact.id);
     try {
-      const result = await processContact(contact.id);
+      const result =
+        contact.aiStatus === 'done' ? await refreshWithProfile(contact) : await processContact(contact.id);
       setContacts((prev) =>
-        prev.map((c) => (c.id === result.contact.id ? { ...c, ...result.contact } : c)),
+        prev.map((c) => (c.id === result.contact.id ? { ...c, ...result.contact, photos: c.photos } : c)),
       );
+      setJobs((prev) => [...prev.filter((j) => j.contactId !== contact.id), ...result.jobs]);
     } catch (error) {
       Alert.alert(
         "Couldn't process with AI",
@@ -304,6 +358,30 @@ export default function EventDashboardScreen() {
   const handleMatchStatus = async (contact: Contact, status: 'confirmed' | 'rejected') => {
     const updated = await setResearchMatchStatus(contact, status);
     if (updated) setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+  };
+
+  const handlePickCompany = async (contact: Contact, choice: CompanyCandidate) => {
+    const isSwitch = choice.name !== contact.research?.company.name;
+    try {
+      const updated = await confirmCompany(contact, choice);
+      if (!updated) return;
+      setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      // A different company makes the research/jobs stale — refresh now
+      // (the user just asked for this company, so it's not a silent re-run).
+      if (isSwitch) await handleProcess(updated);
+    } catch (error) {
+      Alert.alert(
+        "Couldn't update company",
+        error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      );
+    }
+  };
+
+  const handleToggleJobApplied = (job: JobOpportunity) => {
+    setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, applied: !j.applied } : j)));
+    setJobApplied(job.id, !job.applied).catch(() => {
+      setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, applied: job.applied } : j)));
+    });
   };
 
   const handleCopy = async (text: string) => {
@@ -518,6 +596,7 @@ export default function EventDashboardScreen() {
       {showDetail && (selected ? (
         <ContactDetailPanel
           contact={selected}
+          jobs={jobs.filter((job) => job.contactId === selected.id)}
           processing={processingId === selected.id}
           generating={generatingId === selected.id}
           onCopy={handleCopy}
@@ -526,6 +605,8 @@ export default function EventDashboardScreen() {
           onFollowupStatusChange={handleFollowupStatusChange}
           onInterestChange={handleInterestChange}
           onMatchStatus={handleMatchStatus}
+          onPickCompany={handlePickCompany}
+          onToggleJobApplied={handleToggleJobApplied}
           onDelete={handleDeleteContact}
           onBack={isNarrow ? () => setSelectedId(null) : undefined}
         />
