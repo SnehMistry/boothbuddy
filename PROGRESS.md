@@ -89,6 +89,11 @@ Spec: PROMPT.md "Fun UI pass (2026-10-11)".
   Not sent); AI loader cycled during a real "Refresh with my profile"
   (~70s).
 
+### APK
+Rebuilt once after everything else: EAS build `6a3fd7ee-9028-4c5e-ae43-8d6f19ab8159`
+(preview profile) — https://expo.dev/artifacts/eas/UerrVKm2tTGxhglKDcolu7kMqFMFNFWWtPQ32Ud1g-Q.apk
+Not yet tested on the phone.
+
 ## 2026-09-29 (overnight) — profile, company identity, tailored jobs (deployed 2026-10-11, see above)
 
 Implements PROMPT.md's "Profile, company identity & tailored jobs
