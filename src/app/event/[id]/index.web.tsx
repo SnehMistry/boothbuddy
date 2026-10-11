@@ -5,17 +5,21 @@ import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'exp
 import * as Clipboard from 'expo-clipboard';
 
 import { AiErrorNotice } from '@/components/ai-error-notice';
+import { AiThinking } from '@/components/ai-thinking';
 import { Avatar } from '@/components/avatar';
 import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
 import { Chip } from '@/components/chip';
 import { CompanyInfo, hasCompanyIdentity } from '@/components/company-info';
+import { Confetti, useConfetti } from '@/components/confetti';
+import { EmptyState } from '@/components/empty-state';
 import { ExternalLinkRow } from '@/components/external-link-row';
 import { FollowupCard } from '@/components/followup-card';
 import { InterestBadge, InterestPicker } from '@/components/interest-picker';
 import { JobSuggestionRow, JobSuggestionsDisclaimer } from '@/components/job-suggestions';
 import { LoadingView } from '@/components/loading-view';
 import { MoreMenu } from '@/components/more-menu';
+import { StatTile } from '@/components/stat-tile';
 import { ThemedText } from '@/components/themed-text';
 import { Toast, useToast } from '@/components/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -59,7 +63,7 @@ const INTEREST_FILTER_LABELS: Record<InterestFilter, string> = {
 
 function AiStatusChip({ status, error }: { status: Contact['aiStatus']; error?: string }) {
   if (status === 'idle') return <ThemedText type="caption" themeColor="textMuted">—</ThemedText>;
-  if (status === 'processing') return <Badge label="Processing…" tone="accent" />;
+  if (status === 'processing') return <Badge label="✨ Thinking…" tone="fun" />;
   if (status === 'error') return <Badge label="Failed" tone="danger" />;
   return <Badge label="Done" tone="success" />;
 }
@@ -232,29 +236,30 @@ function ContactDetailPanel({
             </View>
           )}
         </View>
-      ) : contact.aiStatus === 'processing' ? (
-        <Badge label="AI is processing this contact…" tone="accent" />
+      ) : contact.aiStatus === 'processing' || processing ? (
+        <AiThinking />
       ) : (
         <>
           {contact.aiStatus === 'error' && <AiErrorNotice error={contact.aiError} />}
           <Button
-            label={processing ? 'AI busy, retrying…' : contact.aiStatus === 'error' ? 'Retry' : 'Process with AI'}
+            label={contact.aiStatus === 'error' ? 'Retry' : 'Process with AI'}
             icon="sparkles"
-            loading={processing}
             onPress={() => onProcess(contact)}
           />
         </>
       )}
 
-      {contact.aiStatus === 'done' && (
-        <Button
-          label={processing ? 'AI busy, retrying…' : 'Refresh with my profile'}
-          icon="refresh"
-          variant="secondary"
-          loading={processing}
-          onPress={() => onProcess(contact)}
-        />
-      )}
+      {contact.aiStatus === 'done' &&
+        (processing ? (
+          <AiThinking />
+        ) : (
+          <Button
+            label="Refresh with my profile"
+            icon="refresh"
+            variant="secondary"
+            onPress={() => onProcess(contact)}
+          />
+        ))}
 
       <ThemedText type="title" style={styles.sectionSpacing}>
         Follow-up draft
@@ -284,6 +289,7 @@ export default function EventDashboardScreen() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const { toastMessage, showToast } = useToast();
+  const { burst, celebrate } = useConfetti();
   const { filtered, search, setSearch, interestFilter, setInterestFilter } =
     useContactFilter(contacts);
 
@@ -408,6 +414,7 @@ export default function EventDashboardScreen() {
     contact,
     followupStatus,
   ) => {
+    if (followupStatus === 'sent' && contact.followupStatus !== 'sent') celebrate();
     setContacts((prev) => prev.map((c) => (c.id === contact.id ? { ...c, followupStatus } : c)));
     await updateContact(contact.id, { followupStatus }).catch(() => {});
   };
@@ -479,59 +486,44 @@ export default function EventDashboardScreen() {
           isNarrow && styles.tableColumnNarrow,
         ]}>
         <View style={styles.toolbar}>
-          <View style={styles.toolbarTop}>
-            <ThemedText type="caption" themeColor="textMuted" style={styles.flexShrink}>
-              {formatHumanDate(event.date)}
-              {event.location ? ` · ${event.location}` : ''}
-            </ThemedText>
+          <ThemedText type="caption" themeColor="textMuted">
+            {formatHumanDate(event.date)}
+            {event.location ? ` · ${event.location}` : ''}
+          </ThemedText>
+          {/* One row of actions; destructive ones live only in the ⋯ menu. */}
+          <View style={styles.toolbarButtons}>
+            <Button
+              pill
+              label="New contact"
+              icon="add"
+              onPress={() => router.push(`/event/${id}/new-contact`)}
+            />
+            <Button
+              pill
+              variant="soft"
+              label="End of day"
+              icon="moon"
+              onPress={() => router.push(`/event/${id}/end-of-day`)}
+            />
+            <Button pill variant="soft" label={width < 400 ? 'CSV' : 'Export CSV'} icon="download-outline" onPress={handleExport} />
+            <View style={styles.flex} />
             <MoreMenu
               accessibilityLabel="Event actions"
               items={[{ label: 'Delete event', icon: 'trash-outline', destructive: true, onPress: handleDeleteEvent }]}
             />
           </View>
-          <View style={styles.toolbarButtons}>
-            <Pressable onPress={() => router.push(`/event/${id}/new-contact`)} style={styles.toolbarLink}>
-              <Ionicons name="add-circle-outline" size={15} color={theme.accent} />
-              <ThemedText type="link" themeColor="accentStrong">
-                New Contact
-              </ThemedText>
-            </Pressable>
-            <Pressable onPress={() => router.push(`/event/${id}/end-of-day`)} style={styles.toolbarLink}>
-              <Ionicons name="moon-outline" size={15} color={theme.accent} />
-              <ThemedText type="link" themeColor="accentStrong">
-                End of Day
-              </ThemedText>
-            </Pressable>
-            <Pressable onPress={handleExport} style={styles.toolbarLink}>
-              <Ionicons name="download-outline" size={15} color={theme.accent} />
-              <ThemedText type="link" themeColor="accentStrong">
-                Export CSV
-              </ThemedText>
-            </Pressable>
-          </View>
         </View>
 
         <View style={styles.statsRow}>
-          <View style={[styles.statTile, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <ThemedText type="title">{contacts.length}</ThemedText>
-            <ThemedText type="caption" themeColor="textMuted">
-              People met
-            </ThemedText>
-          </View>
-          <View style={[styles.statTile, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <ThemedText type="title">{followupsSent}</ThemedText>
-            <ThemedText type="caption" themeColor="textMuted">
-              Follow-ups sent
-            </ThemedText>
-          </View>
-          <View style={[styles.statTile, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <ThemedText type="title" themeColor={dueThisWeek > 0 ? 'warning' : 'text'}>
-              {dueThisWeek}
-            </ThemedText>
-            <ThemedText type="caption" themeColor="textMuted">
-              Due this week
-            </ThemedText>
-          </View>
+          <StatTile compact value={contacts.length} label="People met" icon="people" tone="accent" />
+          <StatTile compact value={followupsSent} label="Follow-ups sent" icon="paper-plane" tone="mint" />
+          <StatTile
+            compact
+            value={dueThisWeek}
+            label="Due this week"
+            icon="alarm"
+            tone={dueThisWeek > 0 ? 'warning' : 'fun'}
+          />
         </View>
 
         <View style={[styles.searchInputWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -556,24 +548,28 @@ export default function EventDashboardScreen() {
         </View>
 
         {contacts.length === 0 ? (
-          <ThemedText type="body" themeColor="textMuted" style={styles.emptyText}>
-            No contacts yet — add one, or capture them on your phone.
-          </ThemedText>
+          <EmptyState
+            compact
+            emoji="👋"
+            title="No one here yet"
+            body="Go say hi to a recruiter! Add them here, or capture them on your phone."
+            actionLabel="Add a contact"
+            onAction={() => router.push(`/event/${id}/new-contact`)}
+          />
         ) : filtered.length === 0 ? (
-          <ThemedText type="body" themeColor="textMuted" style={styles.emptyText}>
-            No contacts match.
-          </ThemedText>
+          <EmptyState compact emoji="🔍" title="No matches" body="Try a different name, company, or filter." />
         ) : (
           <ScrollView style={styles.table}>
             {filtered.map((contact) => (
               <Pressable
                 key={contact.id}
                 onPress={() => setSelectedId(contact.id)}
-                style={({ hovered }: { hovered?: boolean }) => [
+                style={({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => [
                   styles.tableRow,
                   selectedId === contact.id
                     ? { backgroundColor: theme.accentMuted }
-                    : hovered && { backgroundColor: theme.surfaceMuted },
+                    : hovered && [styles.tableRowHover, { backgroundColor: theme.surface }],
+                  pressed && styles.tableRowPressed,
                 ]}>
                 <Avatar name={contact.name || '?'} size={32} />
                 <View style={styles.colName}>
@@ -612,13 +608,23 @@ export default function EventDashboardScreen() {
         />
       ) : (
         <View style={styles.panelEmpty}>
-          <Ionicons name="person-circle-outline" size={40} color={theme.textMuted} />
-          <ThemedText type="body" themeColor="textMuted">
-            Select a contact to review their card and draft a follow-up.
-          </ThemedText>
+          {contacts.length === 0 ? (
+            <EmptyState
+              emoji="🎪"
+              title="Your booth crawl starts here"
+              body="Everyone you meet at this event will show up on the left, with AI notes and a follow-up ready to send."
+            />
+          ) : (
+            <EmptyState
+              emoji="👈"
+              title="Pick someone to catch up on"
+              body="Select a contact to see their card, confirm the research, and draft a follow-up."
+            />
+          )}
         </View>
       ))}
       <Toast message={toastMessage} />
+      <Confetti burst={burst} />
     </View>
   );
 }
@@ -648,35 +654,16 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.one,
   },
   toolbar: {
-    gap: Spacing.one,
-  },
-  toolbarTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     gap: Spacing.two,
   },
   toolbarButtons: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: Spacing.four,
-    rowGap: Spacing.one,
-  },
-  toolbarLink: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Spacing.two,
   },
   statsRow: {
     flexDirection: 'row',
     gap: Spacing.two,
-  },
-  statTile: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
   },
   searchInputWrapper: {
     flexDirection: 'row',
@@ -691,9 +678,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     fontSize: 15,
   },
-  emptyText: {
-    marginTop: Spacing.four,
-  },
   table: {
     flex: 1,
   },
@@ -704,6 +688,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.one,
     borderRadius: Radius.medium,
     gap: Spacing.two,
+    transitionProperty: 'transform, box-shadow, background-color',
+    transitionDuration: '140ms',
+  } as object,
+  tableRowHover: {
+    transform: [{ translateY: -1 }],
+    boxShadow: '0 4px 14px rgba(16, 20, 30, 0.08)',
+  } as object,
+  tableRowPressed: {
+    transform: [{ scale: 0.99 }],
   },
   colName: {
     flex: 1,

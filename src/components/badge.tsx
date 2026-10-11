@@ -4,7 +4,16 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-export type BadgeTone = 'hot' | 'warm' | 'cold' | 'accent' | 'success' | 'warning' | 'danger' | 'neutral';
+export type BadgeTone =
+  | 'hot'
+  | 'warm'
+  | 'cold'
+  | 'accent'
+  | 'fun'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'neutral';
 
 // `text` is a slightly darker (light-mode only) shade of the same hue than
 // `icon` — see the "*Strong" tokens in constants/colors.ts. Small label
@@ -15,6 +24,7 @@ const TONE_COLOR: Record<BadgeTone, { text: ThemeColor; bg: ThemeColor }> = {
   warm: { text: 'warmStrong', bg: 'warmMuted' },
   cold: { text: 'coldStrong', bg: 'coldMuted' },
   accent: { text: 'accentStrong', bg: 'accentMuted' },
+  fun: { text: 'funStrong', bg: 'funMuted' },
   success: { text: 'successStrong', bg: 'successMuted' },
   warning: { text: 'warningStrong', bg: 'warningMuted' },
   danger: { text: 'dangerStrong', bg: 'dangerMuted' },

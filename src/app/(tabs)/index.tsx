@@ -1,10 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 
+import { Button } from '@/components/button';
 import { Card } from '@/components/card';
+import { EmptyState } from '@/components/empty-state';
 import { SkeletonList } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
@@ -27,16 +29,12 @@ export default function EventsScreen() {
       {events === null ? (
         <SkeletonList />
       ) : events.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="calendar-outline" size={40} color={theme.textMuted} />
-          <ThemedText type="heading" style={styles.centerText}>
-            No events yet
-          </ThemedText>
-          <ThemedText type="body" themeColor="textMuted" style={styles.centerText}>
-            Create an event for the career fair or networking session you&apos;re attending, then
-            capture a contact for every person you meet.
-          </ThemedText>
-        </View>
+        <EmptyState
+          emoji="🎪"
+          title="Your first career fair awaits"
+          body="Create an event for the fair or meetup you're heading to, then capture everyone you meet in under a minute."
+          style={styles.emptyState}
+        />
       ) : (
         <FlatList
           data={events}
@@ -73,18 +71,12 @@ export default function EventsScreen() {
         />
       )}
 
-      <Pressable
+      <Button
+        label="New Event"
+        icon="add"
         onPress={() => router.push('/new-event')}
-        style={({ pressed }) => [
-          styles.newEventButton,
-          { backgroundColor: theme.accent },
-          pressed && styles.pressed,
-        ]}>
-        <Ionicons name="add" size={20} color="#ffffff" />
-        <ThemedText type="bodyBold" style={styles.newEventButtonText}>
-          New Event
-        </ThemedText>
-      </Pressable>
+        style={styles.newEventButton}
+      />
     </SafeAreaView>
   );
 }
@@ -95,13 +87,6 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.five,
-    gap: Spacing.two,
-  },
-  centerText: {
-    textAlign: 'center',
   },
   list: {
     padding: Spacing.three,
@@ -127,20 +112,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   newEventButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.one,
+    alignSelf: 'stretch',
     marginHorizontal: Spacing.three,
     marginBottom: Spacing.three,
     paddingVertical: Spacing.three,
     borderRadius: Radius.large,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-  newEventButtonText: {
-    color: '#ffffff',
-    fontSize: 17,
   },
 });

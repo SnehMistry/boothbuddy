@@ -31,7 +31,7 @@ export function Card({
         onPress={onPress}
         style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
           cardStyle,
-          hovered && !pressed && { borderColor: theme.accent },
+          hovered && !pressed && [styles.lifted, { borderColor: theme.accent }],
           pressed && styles.pressed,
         ]}>
         {children}
@@ -58,12 +58,26 @@ const styles = StyleSheet.create({
     borderRadius: Radius.large,
     borderWidth: 1,
     ...cardShadow,
+    ...Platform.select({
+      web: { transitionProperty: 'transform, box-shadow, border-color', transitionDuration: '160ms' } as object,
+      default: {},
+    }),
   },
   padded: {
     padding: Spacing.three,
     gap: Spacing.two,
   },
+  // Web hover: the card rises a couple of pixels with a deeper shadow, so
+  // it's obvious it's clickable.
+  lifted: Platform.select({
+    web: {
+      transform: [{ translateY: -2 }],
+      boxShadow: '0 8px 22px rgba(16, 20, 30, 0.10)',
+    } as object,
+    default: {},
+  }),
   pressed: {
-    opacity: 0.85,
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
   },
 });

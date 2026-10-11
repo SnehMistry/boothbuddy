@@ -10,9 +10,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
+import { BrandGradient } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
@@ -88,14 +90,20 @@ export function SignInScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={[styles.logo, { backgroundColor: theme.accent }]}>
+          <View style={styles.logo}>
+            <LinearGradient
+              colors={BrandGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[StyleSheet.absoluteFill, styles.logoGradient]}
+            />
             <Ionicons name="id-card" size={32} color="#FFFFFF" />
           </View>
           <ThemedText type="title" style={styles.title}>
             BoothBuddy
           </ThemedText>
           <ThemedText type="body" themeColor="textMuted" style={styles.tagline}>
-            Remember everyone you meet.
+            Remember everyone you meet. 🤝
           </ThemedText>
 
           <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -222,6 +230,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignSelf: 'center',
     marginBottom: Spacing.three,
+    transform: [{ rotate: '-6deg' }],
+  },
+  logoGradient: {
+    borderRadius: Radius.large,
   },
   title: {
     textAlign: 'center',

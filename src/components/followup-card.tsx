@@ -2,13 +2,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
+import { AiThinking } from '@/components/ai-thinking';
 import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
 import { Chip } from '@/components/chip';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { haptics } from '@/lib/haptics';
 import { openExternalLink } from '@/lib/links';
 import { FOLLOWUP_TONES, type Contact, type FollowupStatus, type FollowupTone } from '@/lib/types';
 
@@ -100,7 +100,9 @@ function DraftField({
 
 // Per-contact follow-up drafting UI (Phase 4): tone picker, the three
 // drafts as read-only "text areas" with Copy, Regenerate, Open LinkedIn /
-// Open in Gmail, and a sent-status control. Shared between the mobile
+// Open in Gmail, and a sent-status control. (Marking "Sent" celebrates with
+// confetti — the parent screen owns that, since the overlay has to cover
+// the whole screen, not just this card.) Shared between the mobile
 // End-of-Day screen and the web dashboard's contact/draft side panel.
 export function FollowupCard({
   contact,
@@ -145,7 +147,9 @@ export function FollowupCard({
         ))}
       </View>
 
-      {hasDraft ? (
+      {generating ? (
+        <AiThinking kind="draft" />
+      ) : hasDraft ? (
         <>
           <DraftField
             label="LinkedIn connection note"
@@ -174,13 +178,13 @@ export function FollowupCard({
         </>
       ) : (
         <ThemedText type="body" themeColor="textMuted">
-          No draft yet.
+          No draft yet. Tap “Draft with AI” for a note written from your actual conversation ✍️
         </ThemedText>
       )}
 
       <View style={styles.actionRow}>
         <Button
-          label={generating ? 'Drafting…' : hasDraft ? 'Regenerate' : 'Draft with AI'}
+          label={hasDraft ? 'Regenerate' : 'Draft with AI'}
           icon="sparkles"
           variant="primary"
           loading={generating}
@@ -208,10 +212,7 @@ export function FollowupCard({
             key={status}
             label={STATUS_LABELS[status]}
             selected={contact.followupStatus === status}
-            onPress={() => {
-              if (status === 'sent') haptics.success();
-              onStatusChange(contact, status);
-            }}
+            onPress={() => onStatusChange(contact, status)}
           />
         ))}
       </View>

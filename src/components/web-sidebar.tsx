@@ -3,8 +3,11 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { router, usePathname } from 'expo-router';
 
+import { LinearGradient } from 'expo-linear-gradient';
+
 import { ChangePasswordModal } from '@/components/change-password-modal';
 import { ThemedText } from '@/components/themed-text';
+import { BrandGradient } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/theme';
 import { confirmAction } from '@/lib/confirm';
 import { formatHumanDate } from '@/lib/dates';
@@ -85,7 +88,13 @@ export function WebSidebar() {
         isNarrow && styles.sidebarDrawer,
       ]}>
       <Pressable onPress={() => router.push('/')} style={styles.brandRow}>
-        <View style={[styles.logo, { backgroundColor: theme.accent }]}>
+        <View style={styles.logo}>
+          <LinearGradient
+            colors={BrandGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFill, styles.logoGradient]}
+          />
           <Ionicons name="id-card" size={16} color="#FFFFFF" />
         </View>
         {showLabels && <ThemedText type="heading">BoothBuddy</ThemedText>}
@@ -95,10 +104,15 @@ export function WebSidebar() {
         onPress={() => router.push('/new-event')}
         style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
           styles.newEventButton,
-          { backgroundColor: theme.accent },
           hovered && !pressed && styles.hoveredSolid,
           pressed && styles.pressed,
         ]}>
+        <LinearGradient
+          colors={BrandGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[StyleSheet.absoluteFill, styles.newEventGradient]}
+        />
         <Ionicons name="add" size={16} color="#FFFFFF" />
         {showLabels && (
           <ThemedText type="bodyBold" style={styles.newEventButtonText}>
@@ -134,7 +148,7 @@ export function WebSidebar() {
                 ]}>
                 {showLabels ? (
                   <>
-                    <ThemedText type="body" themeColor={active ? 'accent' : 'text'} numberOfLines={1}>
+                    <ThemedText type="body" themeColor={active ? 'accentStrong' : 'text'} numberOfLines={1}>
                       {event.name}
                     </ThemedText>
                     <ThemedText type="caption" themeColor="textMuted">
@@ -289,6 +303,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  logoGradient: {
+    borderRadius: Radius.small,
+  },
+  newEventGradient: {
+    borderRadius: Radius.medium,
+  },
   newEventButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -327,7 +347,8 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   pressed: {
-    opacity: 0.85,
+    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
   },
   footer: {
     paddingTop: Spacing.two,

@@ -1,7 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -13,11 +12,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
+import { Badge } from '@/components/badge';
+import { Button } from '@/components/button';
 import { Card } from '@/components/card';
+import { EmptyState } from '@/components/empty-state';
 import { Chip } from '@/components/chip';
 import { InterestBadge } from '@/components/interest-picker';
 import { MoreMenu } from '@/components/more-menu';
 import { SkeletonList } from '@/components/skeleton';
+import { StatTile } from '@/components/stat-tile';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useContactFilter, type InterestFilter } from '@/hooks/use-contact-filter';
@@ -41,7 +44,7 @@ const INTEREST_FILTER_LABELS: Record<InterestFilter, string> = {
 
 function AiStatusIcon({ status }: { status: Contact['aiStatus'] }) {
   const theme = useTheme();
-  if (status === 'processing') return <ActivityIndicator size="small" color={theme.accent} />;
+  if (status === 'processing') return <Badge label="✨ Thinking…" tone="fun" />;
   if (status === 'done') return <Ionicons name="checkmark-circle" size={16} color={theme.success} />;
   if (status === 'error') return <Ionicons name="alert-circle" size={16} color={theme.danger} />;
   return null;
@@ -145,25 +148,39 @@ export default function EventTimelineScreen() {
         <View style={styles.eventInfo}>
           <ThemedText type="caption" themeColor="textMuted">
             {formatHumanDate(event.date)}
-            {event.location ? ` · ${event.location}` : ''} · {contacts?.length ?? 0}{' '}
-            {(contacts?.length ?? 0) === 1 ? 'contact' : 'contacts'}
+            {event.location ? ` · ${event.location}` : ''}
           </ThemedText>
+          {!!contacts?.length && (
+            <View style={styles.statsRow}>
+              <StatTile compact value={contacts.length} label="People met" icon="people" tone="accent" />
+              <StatTile
+                compact
+                value={contacts.filter((c) => c.interestLevel === 'hot').length}
+                label="Hot leads"
+                icon="flame"
+                tone="fun"
+              />
+              <StatTile
+                compact
+                value={contacts.filter((c) => c.followupStatus !== 'not_sent').length}
+                label="Followed up"
+                icon="paper-plane"
+                tone="mint"
+              />
+            </View>
+          )}
         </View>
       )}
 
       {contacts === null ? (
         <SkeletonList />
       ) : contacts.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="people-outline" size={40} color={theme.textMuted} />
-          <ThemedText type="heading" style={styles.centerText}>
-            No contacts yet
-          </ThemedText>
-          <ThemedText type="body" themeColor="textMuted" style={styles.centerText}>
-            Tap &ldquo;New Contact&rdquo; right after each conversation, while it&apos;s still
-            fresh.
-          </ThemedText>
-        </View>
+        <EmptyState
+          emoji="👋"
+          title="No one here yet"
+          body="Go say hi to a recruiter! Then tap “New Contact” while the conversation is still fresh."
+          style={styles.emptyState}
+        />
       ) : (
         <>
           <View style={styles.searchBar}>
@@ -189,9 +206,7 @@ export default function EventTimelineScreen() {
             </View>
           </View>
           {filtered.length === 0 ? (
-            <ThemedText type="body" themeColor="textMuted" style={styles.centerText}>
-              No contacts match.
-            </ThemedText>
+            <EmptyState compact emoji="🔍" title="No matches" body="Try a different name, company, or filter." />
           ) : (
             <FlatList
               data={filtered}
@@ -221,18 +236,12 @@ export default function EventTimelineScreen() {
         </>
       )}
 
-      <Pressable
+      <Button
+        label="New Contact"
+        icon="add"
         onPress={() => router.push(`/event/${id}/new-contact`)}
-        style={({ pressed }) => [
-          styles.newContactButton,
-          { backgroundColor: theme.accent },
-          pressed && styles.pressed,
-        ]}>
-        <Ionicons name="add" size={22} color="#ffffff" />
-        <ThemedText type="heading" style={styles.newContactButtonText}>
-          New Contact
-        </ThemedText>
-      </Pressable>
+        style={styles.newContactButton}
+      />
     </SafeAreaView>
   );
 }
@@ -252,13 +261,11 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.five,
-    gap: Spacing.two,
   },
-  centerText: {
-    textAlign: 'center',
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
   },
   searchBar: {
     paddingHorizontal: Spacing.three,
@@ -300,20 +307,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  pressed: {
-    opacity: 0.85,
-  },
   newContactButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.one,
+    alignSelf: 'stretch',
     marginHorizontal: Spacing.three,
     marginBottom: Spacing.three,
     paddingVertical: Spacing.four,
     borderRadius: Radius.large,
-  },
-  newContactButtonText: {
-    color: '#ffffff',
   },
 });

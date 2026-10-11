@@ -1,7 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { useTheme } from '@/hooks/use-theme';
+import { AvatarPalette } from '@/constants/colors';
+import { useThemePreference } from '@/lib/theme-preference';
 
 function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -10,17 +11,26 @@ function initialsFor(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-// A colored initials circle for a contact's name — the timeline/table used
-// to be just text, which makes a busy list of names hard to visually scan.
+// Simple string hash → palette index, so the same name always gets the
+// same color (on every device and every reload) without storing anything.
+export function avatarIndexFor(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return Math.abs(hash) % AvatarPalette.light.length;
+}
+
+// A colored initials circle for a contact's name — each person gets their
+// own color, which makes a busy list of names much faster to scan.
 export function Avatar({ name, size = 40 }: { name: string; size?: number }) {
-  const theme = useTheme();
+  const { resolvedScheme } = useThemePreference();
+  const { bg, fg } = AvatarPalette[resolvedScheme][avatarIndexFor(name.trim().toLowerCase())];
   return (
     <View
       style={[
         styles.circle,
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.accentMuted },
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: bg },
       ]}>
-      <ThemedText type="label" themeColor="accentStrong" style={{ fontSize: size * 0.36 }}>
+      <ThemedText type="label" style={{ color: fg, fontSize: size * 0.36, lineHeight: size * 0.44 }}>
         {initialsFor(name || '?')}
       </ThemedText>
     </View>

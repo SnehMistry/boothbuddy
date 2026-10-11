@@ -1,4 +1,3 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +6,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { Badge } from '@/components/badge';
 import { Card } from '@/components/card';
 import { Checkbox } from '@/components/checkbox';
+import { EmptyState } from '@/components/empty-state';
 import { ExternalLinkRow } from '@/components/external-link-row';
 import { JobSuggestionsDisclaimer } from '@/components/job-suggestions';
 import { SkeletonList } from '@/components/skeleton';
@@ -48,15 +48,12 @@ export default function DeadlinesScreen() {
       {sorted === null ? (
         <SkeletonList />
       ) : sorted.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="checkmark-done-circle-outline" size={40} color={theme.textMuted} />
-          <ThemedText type="heading" style={styles.centerText}>
-            Nothing due
-          </ThemedText>
-          <ThemedText type="body" themeColor="textMuted" style={styles.centerText}>
-            Jobs AI finds while processing your contacts will show up here, soonest deadline first.
-          </ThemedText>
-        </View>
+        <EmptyState
+          emoji="🏖️"
+          title="Nothing due — you're all caught up"
+          body="Roles the AI suggests from your conversations will land here, soonest deadline first."
+          style={styles.emptyState}
+        />
       ) : (
         <FlatList
           data={sorted}
@@ -93,13 +90,6 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.five,
-    gap: Spacing.two,
-  },
-  centerText: {
-    textAlign: 'center',
   },
   list: {
     padding: Spacing.three,

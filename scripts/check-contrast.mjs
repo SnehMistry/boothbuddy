@@ -3,7 +3,7 @@
 // Fails (non-zero exit) if any pair used for real text is below the AA
 // threshold for its size (4.5:1 normal text, 3:1 for large/bold-large text).
 
-import { Colors } from '../src/constants/colors.ts';
+import { AvatarPalette, BrandGradient, Colors, GradientTextOn } from '../src/constants/colors.ts';
 
 function srgbToLinear(c) {
   const v = c / 255;
@@ -41,6 +41,10 @@ const PAIRS = [
   ['hotStrong', 'hotMuted', 4.5, 'hot badge text on its own bg'],
   ['warmStrong', 'warmMuted', 4.5, 'warm badge text on its own bg'],
   ['coldStrong', 'coldMuted', 4.5, 'cold badge text on its own bg'],
+  ['funStrong', 'funMuted', 4.5, 'fun-accent text on its own bg (stat tiles)'],
+  ['mintStrong', 'mintMuted', 4.5, 'mint-accent text on its own bg (stat tiles)'],
+  ['funStrong', 'surface', 4.5, 'fun-accent text on cards'],
+  ['mintStrong', 'surface', 4.5, 'mint-accent text on cards'],
 ];
 
 let failed = false;
@@ -55,6 +59,22 @@ for (const mode of ['light', 'dark']) {
       `  ${pass ? 'PASS' : 'FAIL'} ${fg.padEnd(11)} on ${bg.padEnd(13)} ${ratio.toFixed(2)}:1 (need ${min}:1) — ${note}`,
     );
   }
+}
+
+// Fixed (mode-independent) pairs: white label text on both gradient stops,
+// and every avatar's initials on its own circle.
+console.log('\ngradient + avatars:');
+const EXTRA = [
+  ...BrandGradient.map((stop) => [GradientTextOn, stop, `white text on gradient stop ${stop}`]),
+  ...['light', 'dark'].flatMap((mode) =>
+    AvatarPalette[mode].map(({ fg, bg }) => [fg, bg, `${mode} avatar ${fg} on ${bg}`]),
+  ),
+];
+for (const [fg, bg, note] of EXTRA) {
+  const ratio = contrastRatio(fg, bg);
+  const pass = ratio >= 4.5;
+  if (!pass) failed = true;
+  console.log(`  ${pass ? 'PASS' : 'FAIL'} ${ratio.toFixed(2)}:1 (need 4.5:1) — ${note}`);
 }
 
 if (failed) {

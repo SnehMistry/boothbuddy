@@ -1,4 +1,3 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -8,20 +7,26 @@ import { haptics } from '@/lib/haptics';
 import { INTEREST_LEVELS, type InterestLevel } from '@/lib/types';
 
 // `text` is a slightly darker (light-mode only) shade than `fg` — see the
-// "*Strong" tokens in constants/colors.ts. The icon can stay the more
-// vivid base tone (3:1 is the relevant AA threshold there); the label text
-// on the same muted background needs 4.5:1.
+// "*Strong" tokens in constants/colors.ts. `fg` (the vivid base tone) is
+// only used for borders, where 3:1 is the relevant AA threshold; the label
+// text on the same muted background needs 4.5:1.
 const LEVEL_CONFIG: Record<
   InterestLevel,
-  { label: string; icon: keyof typeof Ionicons.glyphMap; fg: ThemeColor; text: ThemeColor; bg: ThemeColor }
+  {
+    label: string;
+    emoji: string;
+    fg: ThemeColor;
+    text: ThemeColor;
+    bg: ThemeColor;
+  }
 > = {
-  hot: { label: 'Hot', icon: 'flame', fg: 'hot', text: 'hotStrong', bg: 'hotMuted' },
-  warm: { label: 'Warm', icon: 'partly-sunny', fg: 'warm', text: 'warmStrong', bg: 'warmMuted' },
-  cold: { label: 'Cold', icon: 'snow', fg: 'cold', text: 'coldStrong', bg: 'coldMuted' },
+  hot: { label: 'Hot', emoji: '🔥', fg: 'hot', text: 'hotStrong', bg: 'hotMuted' },
+  warm: { label: 'Warm', emoji: '☀️', fg: 'warm', text: 'warmStrong', bg: 'warmMuted' },
+  cold: { label: 'Cold', emoji: '❄️', fg: 'cold', text: 'coldStrong', bg: 'coldMuted' },
 };
 
-// Hot/Warm/Cold as a proper grouped-pill picker with a tone-matched icon
-// and color per option, replacing plain text chips that all looked the
+// Hot/Warm/Cold as a proper grouped-pill picker (🔥 / ☀️ / ❄️) with a tone-matched
+// color per option, replacing plain text chips that all looked the
 // same regardless of which level they represented.
 export function InterestPicker({
   value,
@@ -52,7 +57,9 @@ export function InterestPicker({
               },
               pressed && styles.pressed,
             ]}>
-            <Ionicons name={config.icon} size={14} color={selected ? theme[config.fg] : theme.textMuted} />
+            <ThemedText type="label" style={[styles.emoji, !selected && styles.emojiIdle]}>
+              {config.emoji}
+            </ThemedText>
             <ThemedText type="label" themeColor={selected ? config.text : 'textMuted'}>
               {config.label}
             </ThemedText>
@@ -63,12 +70,18 @@ export function InterestPicker({
   );
 }
 
+// The emoji is decorative — the label still carries the meaning, so the
+// badge reads the same to a screen reader and in grayscale.
 export function InterestBadge({ level }: { level: InterestLevel }) {
   const theme = useTheme();
   const config = LEVEL_CONFIG[level];
   return (
-    <View style={[styles.badge, { backgroundColor: theme[config.bg] }]}>
-      <Ionicons name={config.icon} size={12} color={theme[config.fg]} />
+    <View
+      style={[styles.badge, { backgroundColor: theme[config.bg], borderColor: theme[config.fg] }]}
+      accessibilityLabel={`${config.label} lead`}>
+      <ThemedText type="label" style={styles.emoji} importantForAccessibility="no">
+        {config.emoji}
+      </ThemedText>
       <ThemedText type="label" themeColor={config.text}>
         {config.label}
       </ThemedText>
@@ -97,7 +110,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     paddingVertical: 3,
     borderRadius: Radius.pill,
+    borderWidth: 1,
     alignSelf: 'flex-start',
+  },
+  emoji: {
+    fontSize: 13,
+  },
+  emojiIdle: {
+    opacity: 0.6,
   },
   pressed: {
     opacity: 0.8,

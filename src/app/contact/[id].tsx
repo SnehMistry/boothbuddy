@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { AiErrorNotice } from '@/components/ai-error-notice';
+import { AiThinking } from '@/components/ai-thinking';
 import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
@@ -311,31 +312,23 @@ export default function ContactDetailScreen() {
               contact.aiStatus === 'error' ? theme.dangerMuted : theme.accentMuted,
           },
         ]}>
-        {contact.aiStatus === 'processing' ? (
-          <View style={styles.statusRow}>
-            <Ionicons name="sparkles" size={16} color={theme.accent} />
-            <ThemedText type="body" themeColor="accentStrong" style={styles.flexShrink}>
-              AI is processing this contact — this can take up to a minute on the free tier…
+        {contact.aiStatus === 'processing' || processing ? (
+          <>
+            <AiThinking />
+            <ThemedText type="caption" themeColor="accentStrong">
+              Free-tier AI can take up to a minute — feel free to keep browsing.
             </ThemedText>
-          </View>
+          </>
         ) : contact.aiStatus === 'error' ? (
           <>
             <AiErrorNotice error={contact.aiError} />
-            <Button
-              label={processing ? 'Retrying…' : 'Retry'}
-              onPress={() => handleProcess()}
-              disabled={processing}
-              loading={processing}
-              icon="refresh"
-            />
+            <Button label="Retry" onPress={() => handleProcess()} icon="refresh" />
           </>
         ) : (
           <>
             <Button
-              label={processing ? 'AI busy, retrying…' : hasCard ? 'Refresh with my profile' : 'Process with AI'}
+              label={hasCard ? 'Refresh with my profile' : 'Process with AI'}
               onPress={() => handleProcess()}
-              disabled={processing}
-              loading={processing}
               icon={hasCard ? 'refresh' : 'sparkles'}
             />
             {profileChanged && (
@@ -698,11 +691,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.large,
     gap: Spacing.two,
   },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
   companyLinkRow: {
     marginTop: Spacing.one,
   },
@@ -733,9 +721,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
-  },
-  flexShrink: {
-    flexShrink: 1,
   },
   researchHeader: {
     flexDirection: 'row',
