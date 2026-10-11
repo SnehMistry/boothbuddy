@@ -381,3 +381,29 @@ must not change.
    student's situation naturally when useful, without sounding scripted.
 5. **"Refresh with my profile"** on existing contacts re-runs the AI with
    the current profile.
+
+## Fun UI pass (2026-10-11)
+
+Visual/feel upgrade only — every feature keeps working the same. Keep the
+existing theme system (`constants/colors.ts` tokens, no Tailwind).
+
+- **Personality**: playful but professional (Duolingo/Arc/Linear energy,
+  not a corporate dashboard). Keep brand blue; add one or two fun accent
+  colors and a friendly gradient used sparingly (header, empty states,
+  primary button).
+- **Event toolbar**: New Contact / End of Day / Export CSV as clean pill
+  buttons with icons in one row; destructive actions only in the ⋯ menu.
+- **Stats cards**: icon, bigger number, subtle colored background, numbers
+  count up.
+- **Contact list**: avatars colored by name, Hot/Warm/Cold as 🔥 / ☀️ / ❄️
+  badges, hover lift on web.
+- **Empty states**: friendly emoji/illustration + encouraging copy (e.g.
+  "No one here yet. Go say hi to a recruiter! 👋"), including the web
+  "Select a contact" panel.
+- **Micro-interactions**: smooth transitions, button press animations,
+  haptics on phone, confetti when a follow-up is marked Sent and when End
+  of Day is fully done.
+- **AI loading state**: fun rotating messages while AI runs ("Reading their
+  business card…", "Finding open roles…").
+- Keep WCAG AA contrast and light/dark mode; re-run the contrast check;
+  check every screen at 375px, 768px and 1440px.

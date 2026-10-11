@@ -3,7 +3,93 @@
 Working log for picking this project back up. See `README.md` for the
 overall roadmap and `PROMPT.md` for detailed feature specs.
 
-## 2026-09-29 (overnight) — profile, company identity, tailored jobs — ON A BRANCH, NOT DEPLOYED
+## 2026-10-11 — profile/jobs deployed + fun UI pass
+
+### Part 1: `profile-and-jobs` shipped
+Checked first: nothing from the branch was live (migration
+`20260930000000` not applied, both functions last deployed Sep 28, web
+last published Sep 28).
+1. `supabase db push --include-seed --dry-run`, then for real. The seed
+   inserts a profile row for *every* `auth.users` row, so I confirmed
+   there's exactly one account (the owner's) before running it.
+2. Deployed `process-contact` and `generate-followup`.
+3. Tested both against the real stack (signed-in session, "Kelly @
+   Hunter" contact — the ambiguous-name case): company came back
+   "Hunter Industries", confidence low, 3 alternatives (Hunter
+   Engineering, Hunter Douglas, Hunter.io); 3 job suggestions targeted at
+   Summer 2027 / new grad Dec 2027, every link the real careers page;
+   sponsorship "unknown — verify". Draft: 209-char note, mentions junior
+   CS / Summer 2027 internships, no visa talk. ~41s and ~26s.
+4. Fast-forward merged into `main`, pushed, `npm run deploy`. Verified on
+   the live site that "Delete event" is in the ⋯ menu at the end of the
+   toolbar (no squeezed link).
+
+**How testing worked without the user's browser**: the Claude-in-Chrome
+extension wasn't connected, and fetching the Supabase service key to mint
+a session was (rightly) blocked. Instead: a separate Chrome profile
+(`--remote-debugging-port`) where the user signed in once at
+`http://localhost:8081/` (note: in dev, the app is at `/`, *not*
+`/boothbuddy` — that `baseUrl` only applies to the exported build), and a
+headless Chrome driven by `puppeteer-core` (installed in a scratch dir,
+not the project) with that session copied in for screenshots at
+375/768/1440 in light and dark mode. Also: don't start Metro with
+`CI=1` — it disables file watching and serves a stale bundle.
+
+### Part 2: fun UI pass (branch `fun-ui`, merged to `main`)
+Spec: PROMPT.md "Fun UI pass (2026-10-11)".
+- **Tokens** (`constants/colors.ts`): `fun` (violet) and `mint` accents
+  with Muted/Strong variants; `BrandGradient` (#2563EB → #6D4AE8);
+  `AvatarPalette` (8 bg/fg pairs per mode). All added to
+  `scripts/check-contrast.mjs` (54 pairs pass). **Found while doing
+  this**: the old primary button (white on #3C87F7) was only 3.5:1 —
+  below AA for 15px text; the gradient stops are 5.2:1 and 5.5:1. The web
+  sidebar's active event name used `accent` on `accentMuted` (~3:1) —
+  now `accentStrong`.
+- **New dependency**: `expo-linear-gradient` (Expo's own module; works on
+  web + native). Native code → needs the APK rebuild (done below).
+- **Components**: `Button` (gradient primary, `soft` variant, `pill`
+  shape, spring press via `hooks/use-press-scale.ts`, haptic tap, web
+  hover lift), `StatTile` + `hooks/use-count-up.ts`, `EmptyState`
+  (floating emoji on a gradient blob), `AiThinking` (rotating pipeline
+  messages — the app can't see which step the Edge Function is on, so
+  they just cycle in pipeline order), `Confetti` + `useConfetti()` (same
+  local-hook pattern as `useToast`; random layout generated in the event
+  handler, not render/effect, to satisfy the React Compiler lint rules),
+  `ProgressBar`. Avatars hash the name to a palette color. Interest
+  badges use 🔥/☀️/❄️ (emoji is decorative; the label still carries the
+  meaning). `hooks/use-reduce-motion.ts`: count-ups, confetti, and
+  floating emoji all switch off when the OS asks for reduced motion.
+  Haptics now skip web entirely.
+- **Screens**: web event toolbar is one row of pills (New contact
+  [gradient], End of day, Export) + ⋯; stat tiles on web home (gradient
+  welcome banner), web event, and phone event screens; friendly empty
+  states everywhere (events, contacts, no matches, "Pick someone to catch
+  up on", End of Day, Deadlines); AI loader replaces the "AI busy,
+  retrying…" labels; End of Day gets a progress bar ("fully done" =
+  every follow-up Sent/Replied + every action item checked; job
+  suggestions don't count) and confetti when it hits 100%; confetti on
+  Sent on web and phone.
+- **Layout bugs found at 375/768px and fixed**: toolbar ⋯ overflowed
+  its 420px column (shorter labels below 420px, pills center-aligned);
+  at 768px the sidebar + 420px list left the detail panel ~90px wide —
+  the event dashboard now goes single-column below 1024px; header
+  titles and the tab screens (home/settings/deadlines) sat under the
+  floating hamburger on narrow web.
+- **Bug found and fixed**: AI deadlines with no year ("November 15") were
+  parsed by V8 as Nov 15, **2001** — displayed as 2001, sorted first,
+  never "due this week", and phone reminders were scheduled in 2001 (so
+  never fired). New `parseDeadline()` in `lib/deadlines.ts` treats a
+  yearless date as its next occurrence (60-day grace for just-missed
+  ones); display omits the year instead of inventing one. 6 new tests.
+- Ran `npx expo install --fix` (SDK 57 patch bumps) so the rebuilt APK
+  is current; `expo-doctor` 21/21.
+- Verified: tsc, lint (0 problems), 46 tests, contrast check; every
+  screen at 375/768/1440 in light + dark, no horizontal overflow, no page
+  errors; confetti fired and cleared on a real Sent (then reverted to
+  Not sent); AI loader cycled during a real "Refresh with my profile"
+  (~70s).
+
+## 2026-09-29 (overnight) — profile, company identity, tailored jobs (deployed 2026-10-11, see above)
 
 Implements PROMPT.md's "Profile, company identity & tailored jobs
 (2026-09-29)". **Everything is on the `profile-and-jobs` branch, pushed to
