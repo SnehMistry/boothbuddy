@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import type { EventWithStats, UpcomingDeadline } from '@/lib/storage';
+import { parseDeadline } from '@/lib/deadlines';
 
 const CHANNEL_ID = 'boothbuddy-reminders';
 
@@ -75,7 +76,9 @@ export async function resyncReminders(
 
   for (const job of deadlines) {
     if (!job.deadline) continue;
-    const dueDate = new Date(job.deadline);
+    // parseDeadline, not new Date(): "November 15" (no year) would otherwise
+    // land in 2001 and the reminder would never fire.
+    const dueDate = new Date(parseDeadline(job.deadline));
     if (Number.isNaN(dueDate.getTime())) continue; // free-text deadlines like "rolling" can't be scheduled
 
     const dayBefore = new Date(dueDate);

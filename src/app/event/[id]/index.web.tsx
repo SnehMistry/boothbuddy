@@ -280,7 +280,12 @@ export default function EventDashboardScreen() {
   const navigation = useNavigation();
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const isNarrow = width < 768;
+  // One column (list, then detail with a Back link) until there's room for
+  // the 260px sidebar + 420px list + a readable detail panel side by side.
+  const isNarrow = width < 1024;
+  // Phone-width browsers: shorten toolbar labels so every pill and the ⋯
+  // menu still fit on one row.
+  const isTiny = width < 420;
   const [event, setEvent] = useState<BoothEvent | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [jobs, setJobs] = useState<JobOpportunity[]>([]);
@@ -494,7 +499,7 @@ export default function EventDashboardScreen() {
           <View style={styles.toolbarButtons}>
             <Button
               pill
-              label="New contact"
+              label={isTiny ? 'New' : 'New contact'}
               icon="add"
               onPress={() => router.push(`/event/${id}/new-contact`)}
             />
@@ -505,7 +510,7 @@ export default function EventDashboardScreen() {
               icon="moon"
               onPress={() => router.push(`/event/${id}/end-of-day`)}
             />
-            <Button pill variant="soft" label={width < 400 ? 'CSV' : 'Export CSV'} icon="download-outline" onPress={handleExport} />
+            <Button pill variant="soft" label={isTiny ? 'CSV' : 'Export'} icon="download-outline" onPress={handleExport} />
             <View style={styles.flex} />
             <MoreMenu
               accessibilityLabel="Event actions"

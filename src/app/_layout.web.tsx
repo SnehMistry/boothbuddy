@@ -1,9 +1,10 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import { View } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 
 import { ConfigErrorScreen } from '@/components/config-error-screen';
 import { LoadingView } from '@/components/loading-view';
 import { SignInScreen } from '@/components/sign-in-screen';
+import { ThemedText } from '@/components/themed-text';
 import { WebSidebar } from '@/components/web-sidebar';
 import { useSession } from '@/hooks/use-session';
 import { supabaseConfigError } from '@/lib/supabase';
@@ -26,6 +27,10 @@ export default function WebRootLayout() {
 function WebRootLayoutInner() {
   const { resolvedScheme } = useThemePreference();
   const { session, loading } = useSession();
+  // Below the sidebar's drawer breakpoint (768px, see web-sidebar.tsx) the
+  // hamburger button floats over the header's top-left corner — indent
+  // the title so the button doesn't cover its first letters.
+  const isNarrow = useWindowDimensions().width < 768;
 
   if (supabaseConfigError) return <ConfigErrorScreen message={supabaseConfigError} />;
   if (loading) return <LoadingView />;
@@ -36,7 +41,18 @@ function WebRootLayoutInner() {
       <View style={{ flex: 1, flexDirection: 'row', minHeight: '100%' }}>
         <WebSidebar />
         <View style={{ flex: 1 }}>
-          <Stack>
+          <Stack
+            screenOptions={
+              isNarrow
+                ? {
+                    headerTitle: ({ children }) => (
+                      <ThemedText type="heading" numberOfLines={1} style={{ marginLeft: 44 }}>
+                        {children}
+                      </ThemedText>
+                    ),
+                  }
+                : undefined
+            }>
             <Stack.Screen name="(tabs)" options={{ title: 'BoothBuddy', headerShown: false }} />
             <Stack.Screen
               name="new-event"

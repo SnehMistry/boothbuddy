@@ -154,7 +154,8 @@ const styles = StyleSheet.create({
   pill: {
     borderRadius: Radius.pill,
     paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: Spacing.two + 4,
+    alignSelf: 'center',
   },
   hovered: {
     opacity: 0.92,

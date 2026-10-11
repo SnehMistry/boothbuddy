@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 
 import { EmptyState } from '@/components/empty-state';
@@ -29,6 +29,7 @@ const STAT_TILES: {
 // across every event.
 export default function WebHomeScreen() {
   const theme = useTheme();
+  const isNarrow = useWindowDimensions().width < 600;
   const [events, setEvents] = useState<BoothEvent[] | null>(null);
   const [stats, setStats] = useState<OverallStats | null>(null);
 
@@ -40,8 +41,8 @@ export default function WebHomeScreen() {
   );
 
   return (
-    <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.container}>
-      <View style={styles.hero}>
+    <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={[styles.container, isNarrow && styles.containerNarrow]}>
+      <View style={[styles.hero, isNarrow && styles.heroNarrow]}>
         <LinearGradient
           colors={BrandGradient}
           start={{ x: 0, y: 0 }}
@@ -64,10 +65,11 @@ export default function WebHomeScreen() {
             <StatTile
               key={tile.key}
               value={stats[tile.key]}
-              label={tile.label}
               icon={tile.icon}
               tone={tile.tone === 'fun' && stats[tile.key] > 0 ? 'warning' : tile.tone}
-              style={styles.statTile}
+              compact={isNarrow}
+              label={isNarrow && tile.key === 'applicationsDueThisWeek' ? 'Due this week' : tile.label}
+              style={!isNarrow && styles.statTile}
             />
           ))}
         </View>
@@ -93,6 +95,13 @@ const styles = StyleSheet.create({
     maxWidth: 1000,
     width: '100%',
   },
+  containerNarrow: {
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
+  heroNarrow: {
+    padding: Spacing.four,
+  },
   hero: {
     padding: Spacing.five,
     borderRadius: Radius.large + 8,
@@ -111,7 +120,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.three,
+    gap: Spacing.two,
   },
   statTile: {
     flexGrow: 1,

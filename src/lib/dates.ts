@@ -17,7 +17,14 @@ export function formatHumanDate(input: string): string {
   }
   const parsed = Date.parse(input);
   if (!Number.isNaN(parsed)) {
-    return new Date(parsed).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    // "November 15" has no year — JS fills in a default one (2001 in V8),
+    // so show only month + day rather than inventing a year.
+    const hasYear = /\b\d{4}\b/.test(input);
+    return new Date(parsed).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      ...(hasYear && { year: 'numeric' as const }),
+    });
   }
   return input;
 }
